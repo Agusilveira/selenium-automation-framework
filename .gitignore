@@ -3,11 +3,11 @@ target/
 *.iml
 .vscode/
 *.log
-logs/
-allure-results/
-allure-report/
-reports/
-evidence/
+/logs/
+/allure-results/
+/allure-report/
+/reports/
+/evidence/
 .env
 
 # Notas de trabajo, no parte del framework
