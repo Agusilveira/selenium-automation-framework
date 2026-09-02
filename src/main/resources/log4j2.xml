@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+  <Properties>
+    <Property name="patron">%d{HH:mm:ss.SSS} [%t] %-5level %logger{1} - %msg%n</Property>
+  </Properties>
+
+  <Appenders>
+    <Console name="Consola" target="SYSTEM_OUT">
+      <PatternLayout pattern="${patron}"/>
+    </Console>
+    <RollingFile name="Archivo" fileName="logs/framework.log"
+                 filePattern="logs/framework-%d{yyyy-MM-dd}-%i.log.gz">
+      <PatternLayout pattern="${patron}"/>
+      <Policies>
+        <SizeBasedTriggeringPolicy size="10 MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="5"/>
+    </RollingFile>
+  </Appenders>
+
+  <Loggers>
+    <!-- Selenium avisa por cada driver cuando no encuentra una version de CDP
+         que coincida con el navegador instalado. No usamos DevTools. -->
+    <Logger name="org.openqa.selenium" level="WARN"/>
+    <Logger name="com.silveira" level="INFO"/>
+    <Root level="INFO">
+      <AppenderRef ref="Consola"/>
+      <AppenderRef ref="Archivo"/>
+    </Root>
+  </Loggers>
+</Configuration>
