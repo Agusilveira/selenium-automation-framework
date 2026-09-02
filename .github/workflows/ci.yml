@@ -1,0 +1,99 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  testng:
+    name: TestNG (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, firefox]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Correr la regresion
+        env:
+          TEST_ENV: ci
+          BROWSER: ${{ matrix.browser }}
+          SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD || 'secret_sauce' }}
+        run: mvn -B test -DsuiteXmlFile=src/test/resources/suites/regression.xml
+
+      - name: Publicar reporte y evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-${{ matrix.browser }}
+          path: |
+            reports/
+            evidence/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  cucumber:
+    name: Cucumber
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Correr los features
+        env:
+          TEST_ENV: ci
+          SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD || 'secret_sauce' }}
+        run: mvn -B test -Pcucumber
+
+      - name: Publicar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-cucumber
+          path: reports/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  publicar-reporte:
+    needs: testng
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Descargar el reporte de Chrome
+        uses: actions/download-artifact@v4
+        with:
+          name: reporte-chrome
+          path: site
+
+      - name: Dejar el reporte como index
+        run: mv site/ExtentReport.html site/index.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
