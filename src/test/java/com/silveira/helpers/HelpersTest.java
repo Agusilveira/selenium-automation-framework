@@ -1,6 +1,7 @@
 package com.silveira.helpers;
 
 import com.silveira.exceptions.ConfigKeyMissingException;
+import com.silveira.exceptions.FrameworkException;
 import com.silveira.exceptions.InvalidPathException;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
@@ -88,5 +89,45 @@ public class HelpersTest {
         assertThatThrownBy(() -> PropertiesHelper.locator("login.no.existe"))
                 .isInstanceOf(ConfigKeyMissingException.class)
                 .hasMessageContaining("login.no.existe");
+    }
+
+    // --- LocatorHelper ---
+
+    @Test
+    public void construyeUnBySegunElTipoDelArchivo() {
+        assertThat(LocatorHelper.by("login.boton").toString())
+                .contains("cssSelector")
+                .contains("login-button");
+    }
+
+    @Test
+    public void reemplazaLosParametrosDelLocator() {
+        assertThat(LocatorHelper.by("inventario.agregar", "sauce-labs-backpack").toString())
+                .contains("add-to-cart-sauce-labs-backpack");
+    }
+
+    @Test
+    public void unTipoDeLocatorDesconocidoFallaExplicandoLosValidos() {
+        assertThatThrownBy(() -> LocatorHelper.parsear("roto", "inventado:algo"))
+                .isInstanceOf(FrameworkException.class)
+                .hasMessageContaining("inventado")
+                .hasMessageContaining("css");
+    }
+
+    @Test
+    public void unLocatorSinTipoFallaIndicandoElFormato() {
+        assertThatThrownBy(() -> LocatorHelper.parsear("roto", "[data-test='x']"))
+                .isInstanceOf(FrameworkException.class)
+                .hasMessageContaining("tipo:valor");
+    }
+
+    @Test
+    public void resuelveLosOchoTiposDeLocator() {
+        assertThat(LocatorHelper.parsear("k", "xpath://div").toString()).contains("xpath");
+        assertThat(LocatorHelper.parsear("k", "id:usuario").toString()).contains("id");
+        assertThat(LocatorHelper.parsear("k", "name:email").toString()).contains("name");
+        assertThat(LocatorHelper.parsear("k", "class:btn").toString()).contains("class");
+        assertThat(LocatorHelper.parsear("k", "tag:body").toString()).contains("tag");
+        assertThat(LocatorHelper.parsear("k", "link:Salir").toString()).contains("link");
     }
 }
