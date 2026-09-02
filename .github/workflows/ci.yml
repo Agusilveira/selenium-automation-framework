@@ -88,8 +88,12 @@ jobs:
           name: reporte-chrome
           path: site
 
+      # El artefacto sube reports/ y evidence/, asi que conserva esa estructura:
+      # el HTML queda en site/reports/, no en la raiz de site/.
       - name: Dejar el reporte como index
-        run: mv site/ExtentReport.html site/index.html
+        run: |
+          mv site/reports/ExtentReport.html site/index.html
+          rm -rf site/reports
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
