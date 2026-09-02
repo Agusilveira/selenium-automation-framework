@@ -9,3 +9,6 @@ allure-report/
 reports/
 evidence/
 .env
+
+# Notas de trabajo, no parte del framework
+docs/superpowers/
