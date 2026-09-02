@@ -51,6 +51,13 @@
       <artifactId>allure-testng</artifactId>
       <version>${allure.version}</version>
     </dependency>
+    <!-- Necesaria para el plugin AllureCucumber7Jvm que declara el runner: sin
+         ella el runner falla al arrancar con ClassNotFoundException. -->
+    <dependency>
+      <groupId>io.qameta.allure</groupId>
+      <artifactId>allure-cucumber7-jvm</artifactId>
+      <version>${allure.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
