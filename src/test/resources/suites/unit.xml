@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <suite name="Unitarios del framework" verbose="1">
-    <test name="Logica pura, sin navegador">
+    <test name="Logica pura y driver">
         <packages>
             <package name="com.silveira.config"/>
+            <package name="com.silveira.driver"/>
             <package name="com.silveira.helpers"/>
             <package name="com.silveira.utils"/>
         </packages>
