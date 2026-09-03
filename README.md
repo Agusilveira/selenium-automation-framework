@@ -8,7 +8,7 @@ runner principal y **Cucumber** como camino opcional.
 El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
 demostración de que funciona, no el objetivo.
 
-**34 clases de framework · 43 casos de ejemplo · suites paralelas · CI en dos navegadores**
+**36 clases de framework · 57 casos sobre dos proyectos · suites paralelas · CI en dos navegadores**
 
 ## Correrlo
 
@@ -45,7 +45,7 @@ src/test/java/com/silveira/          QUIEN LO USA
 ├── common/          BaseTest
 ├── listeners/       TestListener · RetryAnalyzer · AnnotationTransformer
 ├── dataprovider/    DataProviderManager
-├── projects/        proyecto de ejemplo: páginas y casos
+├── projects/        dos proyectos de ejemplo: SauceDemo y the-internet
 └── cucumber/        runner, steps y hooks sobre las mismas páginas
 
 src/test/resources/
@@ -127,15 +127,33 @@ registra, y cambiar de herramienta de reporte no toca ni un test.
 Selenium Manager los resuelve. Un `chromedriver.exe` commiteado deja de servir
 apenas el navegador se actualiza.
 
-### Configuración de Chrome para CI
+### El recurso a JavaScript está medido, no escondido
 
-Conocimiento pagado a fuerza de diagnóstico en un proyecto anterior: en runners de
-CI, Chrome headless a veces no entrega los eventos de entrada. Selenium no lanza
-nada, el elemento está visible y habilitado, y el click no produce efecto.
+En ciertos elementos, ningún input mediado por WebDriver llega a la página: ni
+`element.click()`, ni `Actions.moveToElement().click()`, ni enfocar y mandar
+ENTER. Se verificó instrumentando el documento con un listener propio, y no llega
+ningún evento — mientras el elemento mide impecable: único que matchea el
+selector, conectado al documento, habilitado, en el viewport, y `elementFromPoint`
+lo devuelve a él. Solo la invocación directa por DOM funciona.
 
-`BrowserFactory` incluye las flags que evitan la mayor parte de eso, y `WebUI`
-verifica el efecto de las acciones que pueden perderse. El detalle está comentado
-en el código, en el punto exacto donde importa.
+Se reprodujo en Windows y Linux, headless y con navegador visible, en máquina
+local y en CI. No es del entorno ni del test.
+
+Por eso `WebUI` recurre a JavaScript como último recurso. Y para que eso no se
+convierta en una muleta cómoda, cada uso **se cuenta**, **aparece en el encabezado
+del reporte** y hay un **umbral que rompe el build**. En la última corrida de CI:
+Chrome lo necesitó 7 veces, Firefox ninguna. Si el número crece, la respuesta es
+ver qué elemento nuevo lo necesita, no subir el umbral.
+
+### Fallos tolerados que igual terminan en rojo
+
+`WebUI` acepta una política por acción: `OPTIONAL` para lo que legítimamente puede
+no estar (un banner de cookies), `CONTINUE_ON_FAILURE` para juntar varios fallos y
+verlos todos de una en vez de arreglar de a uno.
+
+`SoftFailureListener` da vuelta el resultado del caso a FAILURE si terminó con
+fallos tolerados. Sin esa pieza, `CONTINUE_ON_FAILURE` sería una forma elegante de
+esconder errores.
 
 ## Cómo agregar algo
 
@@ -148,7 +166,7 @@ Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
 | Una fuente de datos | `helpers/` + `dataprovider/` | `ExcelHelper` + `DataProviderManager` |
 | Un navegador | `enums/Browser` + `driver/BrowserFactory` | el caso `EDGE` |
 | Un destino de reporte | `reports/` | `AllureManager` |
-| Un proyecto nuevo | `projects/<nombre>/` + `objects/<nombre>.properties` | `projects/saucedemo` |
+| Un proyecto nuevo | `projects/<nombre>/` + `objects/<nombre>.properties` | `projects/theinternet` |
 
 Lo que viene está en [ROADMAP.md](ROADMAP.md).
 
