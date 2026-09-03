@@ -98,6 +98,51 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  grid:
+    name: Selenium Grid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Levantar el Grid
+        run: docker compose -f docker-compose.grid.yml up -d
+
+      # El compose levanta los contenedores, pero los nodos tardan en registrarse
+      # contra el hub. Correr sin esperar da un "no hay nodos disponibles" que
+      # parece un fallo del framework y no lo es.
+      - name: Esperar a que el Grid este listo
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4444/wd/hub/status | grep -q '"ready": *true'; then
+              echo "Grid listo tras $i intento(s)"; exit 0
+            fi
+            sleep 5
+          done
+          echo "El Grid no quedo listo en 150 segundos"; docker compose -f docker-compose.grid.yml logs; exit 1
+
+      - name: Correr el camino critico contra el Grid
+        run: mvn -B test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid
+
+      - name: Bajar el Grid
+        if: always()
+        run: docker compose -f docker-compose.grid.yml down
+
+      - name: Publicar reporte y video de sesion
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-grid
+          path: |
+            reports/
+            grid-videos/
+          retention-days: 30
+          if-no-files-found: ignore
+
   cucumber:
     name: Cucumber
     runs-on: ubuntu-latest

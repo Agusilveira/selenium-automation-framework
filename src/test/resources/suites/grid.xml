@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Corre contra el Selenium Grid del docker-compose. Es el camino critico, no
+     la regresion completa: el objetivo es ejercitar la rama GRID de
+     TargetFactory, no repetir en remoto lo que ya se probo en local. -->
+<suite name="Grid" verbose="1">
+
+    <listeners>
+        <listener class-name="com.silveira.listeners.TestListener"/>
+        <listener class-name="com.silveira.listeners.AnnotationTransformer"/>
+        <listener class-name="com.silveira.listeners.SoftFailureListener"/>
+        <listener class-name="com.silveira.listeners.FallbackGuardListener"/>
+    </listeners>
+
+    <test name="Camino critico en el Grid">
+        <groups>
+            <run><include name="smoke"/></run>
+        </groups>
+        <packages>
+            <package name="com.silveira.projects.saucedemo.tests"/>
+        </packages>
+    </test>
+
+    <test name="Guardias del framework">
+        <classes>
+            <class name="com.silveira.guards.FallbackGuardTest"/>
+        </classes>
+    </test>
+</suite>

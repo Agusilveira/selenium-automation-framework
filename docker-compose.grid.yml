@@ -1,0 +1,74 @@
+# Selenium Grid para correr los tests contra navegadores en contenedores.
+#
+#   docker compose -f docker-compose.grid.yml up -d
+#   mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid
+#   docker compose -f docker-compose.grid.yml down
+#
+# Las versiones estan fijadas a proposito. Un 'latest' hace que la misma suite
+# corra contra navegadores distintos segun el dia, y cuando algo falla no se sabe
+# si cambio el codigo o cambio el navegador.
+
+services:
+
+  hub:
+    image: selenium/hub:4.47.0
+    container_name: grid-hub
+    ports:
+      - "4442:4442"   # publicacion de eventos
+      - "4443:4443"   # suscripcion de eventos
+      - "4444:4444"   # el endpoint contra el que corren los tests
+    environment:
+      # Una sesion que no arranca en 5 minutos no va a arrancar: mejor fallar
+      # rapido que dejar la suite esperando hasta el timeout de CI.
+      - GRID_NEW_SESSION_WAIT_TIMEOUT=300
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4444/wd/hub/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  chrome:
+    image: selenium/node-chrome:4.47.0
+    container_name: grid-chrome
+    shm_size: 2gb          # sin esto Chrome se queda sin memoria compartida y crashea
+    depends_on:
+      - hub
+    environment:
+      - SE_EVENT_BUS_HOST=hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=4
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_SCREEN_WIDTH=1280
+      - SE_SCREEN_HEIGHT=1024
+
+  firefox:
+    image: selenium/node-firefox:4.47.0
+    container_name: grid-firefox
+    shm_size: 2gb
+    depends_on:
+      - hub
+    environment:
+      - SE_EVENT_BUS_HOST=hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=2
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_SCREEN_WIDTH=1280
+      - SE_SCREEN_HEIGHT=1024
+
+  # Graba en video lo que pasa en el nodo de Chrome. Para fallos de timing, donde
+  # el screenshot del final no dice que paso, es la diferencia entre diagnosticar
+  # y adivinar. Los videos quedan en ./grid-videos.
+  video:
+    image: selenium/video:ffmpeg-8.1-20260808
+    container_name: grid-video
+    depends_on:
+      - chrome
+    environment:
+      - DISPLAY_CONTAINER_NAME=grid-chrome
+      - FILE_NAME=chrome-session.mp4
+      - SE_SCREEN_WIDTH=1280
+      - SE_SCREEN_HEIGHT=1024
+    volumes:
+      - ./grid-videos:/videos

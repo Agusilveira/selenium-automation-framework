@@ -66,8 +66,18 @@ public final class TargetFactory {
         String url = ConfigManager.get().gridUrl();
         try {
             return new RemoteWebDriver(URI.create(url).toURL(), opciones);
+
         } catch (MalformedURLException | IllegalArgumentException e) {
             throw new TargetNotValidException("La URL del Grid no es válida: '" + url + "'.", e);
+
+        } catch (RuntimeException e) {
+            // El error crudo de Selenium cuando el Grid no responde es una pared de
+            // texto que no dice qué hacer. Este dice exactamente qué falta.
+            throw new TargetNotValidException("""
+                    No se pudo crear una sesion en el Selenium Grid de %s.
+                    Levantalo con: docker compose -f docker-compose.grid.yml up -d
+                    Y verifica que este listo en %s/status
+                    Motivo: %s""".formatted(url, url, e.getMessage()), e);
         }
     }
 }
