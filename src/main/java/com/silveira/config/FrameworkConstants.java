@@ -29,6 +29,17 @@ public final class FrameworkConstants {
     /** Espera corta para confirmar el efecto de una acción antes de reintentarla. */
     public static final int TIMEOUT_EFECTO_ACCION = 4;
 
-    /** Intentos de una acción antes de recurrir a JavaScript. */
-    public static final int INTENTOS_ACCION = 3;
+    /**
+     * Intentos nativos de una acción antes de recurrir a JavaScript.
+     *
+     * Son 2 y no 3 por medición, no por intuición: en unas 120 ejecuciones de test
+     * —local y contra Grid, Chrome y Firefox— un reintento nativo no rescató un
+     * solo click. O funciona en el primer intento, o hace falta JavaScript. Cada
+     * intento de más cuesta TIMEOUT_EFECTO_ACCION segundos por click afectado.
+     *
+     * Queda uno como seguro: 120 ejecuciones son bastantes, pero no cubren toda
+     * condición de red posible. Si alguna vez el log muestra "necesitó 2 intentos",
+     * ese reintento se ganó el lugar; si nunca aparece, se puede bajar a 1.
+     */
+    public static final int INTENTOS_ACCION = 2;
 }

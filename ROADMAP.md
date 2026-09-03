@@ -60,24 +60,44 @@ vez de forzar una sola abstracción para los dos mundos.
   los fixtures son el puente. El cruce se puede demostrar cuando se resuelva el
   ítem de Selenium Grid en Docker, que trae la infraestructura necesaria.
 
-- **El recurso a JavaScript cuesta 12 segundos por click en el Grid.** Sobre el
-  Grid, los botones del checkout de SauceDemo necesitan JavaScript el 100% de las
-  veces, no intermitentemente. El framework igual hace 3 intentos de 4 segundos
-  antes de recurrir a él, así que `compraCompleta` pasa de 15 a 27 segundos. Una
-  memoria por corrida —"este locator ya necesitó JavaScript, no vuelvas a esperar
-  12 segundos"— lo resolvería, a costa de sumarle estado a `clickHasta`.
+- **`clickHasta` reintenta una vez.** Verifica que el disparador siga presente
+  antes de reintentar, así que no repite una acción que ya ocurrió. Pero si un
+  botón sigue visible después de un click que tuvo efecto parcial, el reintento es
+  posible. Para acciones no idempotentes conviene pasar un efecto inequívoco, como
+  un cambio de URL.
 
-- **`clickHasta` reintenta hasta 3 veces.** Ahora verifica que el disparador siga
-  presente antes de reintentar, así que no repite una acción que ya ocurrió. Pero
-  si un botón sigue visible después de un click que sí tuvo efecto parcial, el
-  reintento es posible. Para acciones no idempotentes conviene pasar un efecto
-  que sea inequívoco, como un cambio de URL.
+- **El único reintento que queda no tiene evidencia a favor.** En las mediciones
+  ninguno rescató un click. Se dejó como seguro ante condiciones de red que no
+  probamos, y el log avisa si alguna vez sirve: si "necesitó 2 intentos" nunca
+  aparece, se puede bajar a 1 y ahorrar otros 4 segundos por click afectado.
 
 ---
 
 ## Resuelto
 
 Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### El costo del recurso a JavaScript
+
+Sobre el Grid, `compraCompleta` tardaba 27 segundos y la suite 34. El
+`FallbackTracker` mostró dónde se iban: los botones del checkout necesitan
+JavaScript el 100% de las veces, y el framework gastaba 3 intentos de 4 segundos
+en cada uno antes de rendirse.
+
+**La primera solución fue la equivocada, y medirla lo demostró.** Implementé una
+memoria por corrida —"este locator ya necesitó JavaScript, no vuelvas a esperar"—
+y el resultado fue **cero mejora**: 34 segundos antes, 34 después. El motivo, que
+el propio tracker delató: los elementos caros aparecen **una sola vez por corrida**
+(5 usos sobre 2 elementos distintos), así que una memoria dentro de la corrida no
+tiene sobre qué actuar. Se revirtió.
+
+El dato que sí resolvió el problema salió de contar reintentos exitosos en unas
+120 ejecuciones: **ninguno**. Nunca un click se recuperó en el segundo o tercer
+intento. La escalera era el desperdicio, no la falta de memoria.
+
+Bajar `INTENTOS_ACCION` de 3 a 2 llevó la suite de 34 a 24 segundos, sin romper
+un solo test. Una línea de configuración, respaldada por una medición, después de
+haber descartado una solución más elaborada que no servía.
 
 ### Selenium Grid en Docker
 

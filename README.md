@@ -150,9 +150,13 @@ local y en CI. No es del entorno ni del test.
 
 Por eso `WebUI` recurre a JavaScript como último recurso. Y para que eso no se
 convierta en una muleta cómoda, cada uso **se cuenta**, **aparece en el encabezado
-del reporte** y hay un **umbral que rompe el build**. En la última corrida de CI:
-Chrome lo necesitó 7 veces, Firefox ninguna. Si el número crece, la respuesta es
-ver qué elemento nuevo lo necesita, no subir el umbral.
+del reporte** y hay un **umbral que rompe el build**. Si el número crece, la
+respuesta es ver qué elemento nuevo lo necesita, no subir el umbral.
+
+Esa métrica ya se pagó sola: mostró que la suite del Grid perdía 10 segundos
+reintentando clicks que nunca iban a funcionar. Contar los reintentos exitosos en
+unas 120 ejecuciones dio **cero**, así que la escalera bajó de 3 intentos a 2 y la
+suite pasó de 34 a 24 segundos.
 
 ### Fallos tolerados que igual terminan en rojo
 
