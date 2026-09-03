@@ -77,6 +77,20 @@ public class AppPages {
         return Integer.parseInt(cola.replaceAll("[^0-9]", ""));
     }
 
+    /**
+     * Cuantos issues abiertos dice la interfaz que hay, segun su propio contador.
+     *
+     * No se cuentan las filas del listado a proposito: la interfaz pagina de a 20,
+     * asi que contar filas mide cuantos entraron en la pagina y no cuantos hay. El
+     * contador de la pestaña es lo que la aplicacion afirma, que es justamente lo
+     * que tiene sentido contrastar contra la base.
+     */
+    public int cantidadDeIssuesAbiertos() {
+        abrirListadoDeIssues();
+        String texto = WebUI.obtenerTexto(LocatorHelper.by("app.issues.contadorAbiertos"));
+        return Integer.parseInt(texto.replaceAll("[^0-9]", ""));
+    }
+
     public boolean existeElIssueConTitulo(String titulo) {
         return titulosDeIssues().stream().anyMatch(t -> t.contains(titulo));
     }

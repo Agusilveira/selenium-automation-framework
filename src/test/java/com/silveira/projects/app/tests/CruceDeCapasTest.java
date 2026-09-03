@@ -9,7 +9,6 @@ import com.silveira.projects.app.pages.AppPages;
 import com.silveira.utils.DateUtils;
 import org.testng.annotations.Test;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -115,6 +114,18 @@ public class CruceDeCapasTest extends BaseAppTest {
                 .isEqualTo("true");
     }
 
+    /**
+     * Las tres capas cuentan lo mismo, y ninguna de las tres cuenta filas.
+     *
+     * La primera version comparaba las filas visibles del listado contra el total
+     * de la base. Paso en CI y fallo en local: en CI la base arranca vacia, en
+     * local llevaba varias corridas encima y habia mas issues que los 20 que entran
+     * en una pagina. El test no medía el total, medía el tamaño de pagina.
+     *
+     * Ahora cada capa da su total de la forma en que esa capa sabe darlo: la base
+     * con un COUNT, la API con la cabecera X-Total-Count, y la interfaz con el
+     * contador de la pestaña, que es lo que la aplicacion le afirma a una persona.
+     */
     @Test(groups = "app",
           description = "Las tres capas coinciden en cuantos issues abiertos hay")
     @FrameworkAnnotation(autor = "Agustin", categoria = {"cruce", "consistencia"})
@@ -129,19 +140,17 @@ public class CruceDeCapasTest extends BaseAppTest {
                  WHERE r.name = ? AND i.is_closed = false
                 """, "framework-demo");
 
-        List<String> porApi = AppApi.titulosDeIssues();
+        int porApi = AppApi.cantidadDeIssuesAbiertos();
         app.ingresar();
-        List<String> enLaInterfaz = app.titulosDeIssues();
+        int enLaInterfaz = app.cantidadDeIssuesAbiertos();
 
-        // La interfaz lista solo los abiertos por defecto; la API se pidio con
-        // state=all. La comparacion util es que la interfaz coincida con la base.
-        assertThat((long) enLaInterfaz.size())
-                .as("la interfaz deberia mostrar los mismos issues abiertos que hay en la base")
+        assertThat((long) porApi)
+                .as("la API y la base deberian contar los mismos issues abiertos")
                 .isEqualTo(enLaBase);
 
-        assertThat(porApi)
-                .as("la API deberia conocer al menos los que muestra la interfaz")
-                .hasSizeGreaterThanOrEqualTo(enLaInterfaz.size());
+        assertThat((long) enLaInterfaz)
+                .as("la interfaz deberia declarar los mismos issues abiertos que hay en la base")
+                .isEqualTo(enLaBase);
     }
 
     @Test(groups = "app",

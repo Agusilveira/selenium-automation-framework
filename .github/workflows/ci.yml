@@ -30,6 +30,18 @@ jobs:
           TEST_ENV: ci
           BROWSER: ${{ matrix.browser }}
           SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD || 'secret_sauce' }}
+          # Notificacion por mail. Sin los secrets el notificador no hace nada,
+          # asi que un fork sin configurar corre igual.
+          #
+          # Solo desde chrome: la matriz corre la misma regresion dos veces, y dos
+          # mails casi identicos por push es la forma mas rapida de que nadie los
+          # lea. Firefox queda cubierto igual por el rojo del job.
+          MAIL_SMTP_HOST: ${{ matrix.browser == 'chrome' && secrets.MAIL_SMTP_HOST || '' }}
+          MAIL_SMTP_PUERTO: ${{ secrets.MAIL_SMTP_PUERTO }}
+          MAIL_USUARIO: ${{ secrets.MAIL_USUARIO }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_DESTINATARIOS: ${{ secrets.MAIL_DESTINATARIOS }}
+          REPORTE_URL: https://agusilveira.github.io/selenium-automation-framework/
         run: mvn -B test -DsuiteXmlFile=src/test/resources/suites/regression.xml
 
       - name: Publicar reporte y evidencia

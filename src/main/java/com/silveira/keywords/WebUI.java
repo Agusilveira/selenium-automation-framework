@@ -1,9 +1,13 @@
 package com.silveira.keywords;
 
+import com.silveira.a11y.AnalisisA11y;
+import com.silveira.a11y.LineaBaseA11y;
+import com.silveira.a11y.ViolacionA11y;
 import com.silveira.config.ConfigManager;
 import com.silveira.config.FrameworkConstants;
 import com.silveira.driver.DriverManager;
 import com.silveira.enums.FailureHandling;
+import com.silveira.exceptions.AccesibilidadException;
 import com.silveira.exceptions.FrameworkException;
 import com.silveira.utils.LogUtils;
 import org.openqa.selenium.By;
@@ -429,6 +433,52 @@ public final class WebUI {
     }
 
     // ------------------------------------------------------------------
+    // Accesibilidad
+    // ------------------------------------------------------------------
+
+    /**
+     * Corre axe-core sobre la pagina y falla solo si la accesibilidad empeoro.
+     *
+     * Es un metodo de WebUI y no una familia de casos aparte a proposito: asi se
+     * suma una linea a los casos que ya existen y la pantalla queda cubierta en el
+     * mismo momento en que se la esta usando de verdad, con sus datos y su estado
+     * reales. Una suite de accesibilidad separada revisa paginas vacias.
+     *
+     * "Empeoro" lo define la linea base de esa pagina: una regla que no estaba, o
+     * una que ahora afecta a mas elementos. Todo lo demas se reporta y no rompe.
+     *
+     * @param pagina nombre de la linea base, sin extension: "login", "inventario"
+     */
+    public static void verificarAccesibilidad(String pagina) {
+        List<ViolacionA11y> violaciones = AnalisisA11y.analizar();
+        AnalisisA11y.reportar(pagina, violaciones);
+
+        if (LineaBaseA11y.enModoActualizacion()) {
+            LineaBaseA11y.guardar(pagina, violaciones);
+            return;
+        }
+
+        if (!LineaBaseA11y.existe(pagina) && !violaciones.isEmpty()) {
+            throw new AccesibilidadException("No hay linea base de accesibilidad para '"
+                    + pagina + "' y la pagina tiene " + violaciones.size()
+                    + " reglas incumplidas. Generala con: mvn test -Da11y.actualizar=true"
+                    + " y revisa el archivo antes de commitearlo.");
+        }
+
+        List<String> regresiones = LineaBaseA11y.regresiones(pagina, violaciones);
+        if (regresiones.isEmpty()) return;
+
+        throw new AccesibilidadException("La accesibilidad de '" + pagina + "' empeoro:"
+                + System.lineSeparator() + "  - "
+                + String.join(System.lineSeparator() + "  - ", regresiones));
+    }
+
+    public static boolean verificarAccesibilidad(String pagina, FailureHandling manejo) {
+        return intentar("verificar accesibilidad de " + pagina,
+                () -> verificarAccesibilidad(pagina), manejo);
+    }
+
+    // ------------------------------------------------------------------
     // Utilidades
     // ------------------------------------------------------------------
 
@@ -443,13 +493,6 @@ public final class WebUI {
     }
 
     /**
-     * Para cuando lo que importa es haber salido de una página, no a cuál se llegó.
-     *
-     * Un login que redirige al panel de inicio es el caso típico: la URL destino
-     * puede cambiar entre versiones de la aplicación, pero dejar la de login es lo
-     * que define que la acción funcionó.
-     */
-    /**
      * Para cuando "contiene" no alcanza porque el origen ya lo cumple.
      *
      * Crear algo desde /issues/new y esperar que la URL contenga "/issues/" es el
@@ -460,6 +503,13 @@ public final class WebUI {
         return ExpectedConditions.urlMatches(expresion);
     }
 
+    /**
+     * Para cuando lo que importa es haber salido de una página, no a cuál se llegó.
+     *
+     * Un login que redirige al panel de inicio es el caso típico: la URL destino
+     * puede cambiar entre versiones de la aplicación, pero dejar la de login es lo
+     * que define que la acción funcionó.
+     */
     public static ExpectedCondition<Boolean> hastaQueLaUrlNoContenga(String fragmento) {
         return ExpectedConditions.not(ExpectedConditions.urlContains(fragmento));
     }

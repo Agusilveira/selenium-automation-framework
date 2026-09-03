@@ -8,7 +8,7 @@ runner principal y **Cucumber** como camino opcional.
 El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
 demostración de que funciona, no el objetivo.
 
-**48 clases de framework · UI, API y base de datos, cruzadas sobre una misma app · CI en ocho jobs**
+**52 clases de framework · UI, API y base de datos, cruzadas sobre una misma app · accesibilidad con línea base · CI en ocho jobs**
 
 ## Correrlo
 
@@ -28,6 +28,7 @@ mvn test -DsuiteXmlFile=src/test/resources/suites/db.xml         # base de datos
 mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid   # contra el Grid
 mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app     # cruce entre capas
 mvn test -Pcucumber                                              # los features
+mvn test -Da11y.actualizar=true                                  # regenera las líneas base de accesibilidad
 mvn test -DBROWSER=firefox -DTEST_ENV=ci                         # override de config
 ```
 
@@ -39,7 +40,9 @@ src/main/java/com/silveira/          EL FRAMEWORK
 ├── driver/          DriverManager · BrowserFactory · TargetFactory
 ├── enums/           Browser · Target · Platform · FailureHandling
 ├── exceptions/      FrameworkException y 4 derivadas
-├── api/             ApiClient · ApiResponse · AuthManager · ContractGuard · Paginador · ApiLogFilter
+├── api/             ApiClient · ApiResponse · AuthManager · ContractGuard · Paginador · ApiLogFilter · RateLimitFilter
+├── a11y/            AnalisisA11y · LineaBaseA11y · ViolacionA11y
+├── notifications/   ResumenDeCorrida · EmailNotifier
 ├── db/              DatabaseManager · DatabaseHelper · SqlLoader
 ├── keywords/        WebUI · WaitUtils · AlertUtils · FrameUtils · WindowUtils · TableUtils
 ├── helpers/         Properties · Locator · Json · Excel · File · Capture
@@ -49,7 +52,7 @@ src/main/java/com/silveira/          EL FRAMEWORK
 
 src/test/java/com/silveira/          QUIEN LO USA
 ├── common/          BaseTest · BaseApiTest · BaseDbTest · BaseAppTest
-├── listeners/       TestListener · RetryAnalyzer · AnnotationTransformer
+├── listeners/       TestListener · RetryAnalyzer · AnnotationTransformer · SoftFailureListener · FallbackGuardListener · NotificacionListener
 ├── dataprovider/    DataProviderManager
 ├── fixtures/        datos para otros tests: ProductosFixture (API) · ClientesFixture (base)
 ├── projects/        SauceDemo · the-internet · DummyJSON (API) · tienda (base) · app (las tres)
@@ -61,6 +64,7 @@ src/test/resources/
 ├── objects/         locators externalizados
 ├── schemas/         JSON Schema de las respuestas
 ├── contracts/       contratos versionados de los endpoints
+├── a11y/            línea base de accesibilidad por pantalla
 ├── sql/             esquema, datos y consultas fuera del codigo Java
 └── data/            JSON y Excel para los DataProviders
 ```
@@ -298,6 +302,94 @@ El token de API lo genera el script y queda en un archivo ignorado por git. Una
 credencial dentro del repositorio es una credencial filtrada, aunque la aplicación
 corra en localhost.
 
+### Accesibilidad que falla solo cuando empeora
+
+`WebUI.verificarAccesibilidad("login")` inyecta **axe-core** y compara contra una
+línea base versionada de esa pantalla.
+
+```java
+login.ingresarYEsperarInventario("standard_user", password());
+inventario.agregarAlCarrito("Sauce Labs Backpack");
+
+WebUI.verificarAccesibilidad("saucedemo-inventario", FailureHandling.CONTINUE_ON_FAILURE);
+```
+
+Que sea un método de `WebUI` y no una familia de casos aparte es la decisión que
+importa: así se suma una línea a los casos que ya existen, y la pantalla se revisa
+con sus datos y su estado reales en vez de vacía.
+
+**El problema que resuelve la línea base.** Sumar accesibilidad a una aplicación
+que ya existe encuentra decenas de violaciones legítimas y anteriores al cambio
+que se está probando. Si eso hace fallar la suite, la suite queda roja el primer
+día y el equipo aprende a ignorarla; si no hace fallar nada, la accesibilidad no
+está probada. La salida es la misma que ya usa `ContractGuard`: guardar el estado
+conocido y fallar únicamente cuando aparece una regla nueva o crece la cantidad de
+elementos de una existente. Lo viejo se reporta siempre, y no rompe.
+
+```properties
+# src/test/resources/a11y/saucedemo-inventario.properties
+select-name=1
+```
+
+Se versiona a propósito: es la única forma de que "esto ya estaba" sea verificable
+y no la memoria de alguien. Se regenera con `mvn test -Da11y.actualizar=true`.
+
+Una mejora nunca hace fallar, pero se avisa: si una regla baja de 3 a 1, la línea
+base quedó más alta de lo necesario y una regresión posterior hasta ese número
+pasaría desapercibida.
+
+**Lo que axe no ve, y conviene decirlo.** Encuentra lo decidible mirando el DOM
+—contraste, textos alternativos, roles ARIA, orden de encabezados— y ronda el 30%
+de los problemas reales. Que el orden de tabulación tenga sentido, que un texto
+alternativo describa la imagen, o que un lector de pantalla se entienda, no. Un
+cero de axe no es una página accesible: es una página sin los errores que una
+máquina puede ver sola.
+
+### Notificaciones: el resumen no sabe por dónde se avisa
+
+El notificador típico arma el texto del mail mientras recorre los resultados de
+TestNG. Ahí el *qué pasó* y el *por dónde se avisa* quedan pegados: sumar otro
+canal obliga a repetir el recorrido, y probar el formato del mensaje obliga a
+levantar un servidor SMTP.
+
+Acá `ResumenDeCorrida` es un valor y `EmailNotifier` uno de sus consumidores.
+
+```java
+ResumenDeCorrida resumen = ResumenDeCorrida.de(suite);
+LogUtils.info(resumen.asunto());
+EmailNotifier.notificar(resumen);
+```
+
+Cuatro decisiones, todas contra la versión ingenua:
+
+- **Las credenciales salen del entorno y de ningún otro lado.** No hay un
+  `mail.password` en el perfil ni un `get` que pueda caer en un archivo del
+  repositorio. Si el framework no puede leer una contraseña de un archivo
+  versionado, nadie la filtra ahí por accidente.
+- **Sin configuración no hace nada, y eso no es un error.** Un `git clone && mvn
+  test` no se rompe ni se cuelga porque falte un servidor SMTP.
+- **Por defecto avisa solo cuando algo falló** (`MAIL_CUANDO=siempre|fallos|nunca`).
+  Una notificación que llega siempre deja de leerse en una semana, y entonces
+  tampoco se lee la que importa.
+- **Nunca hace fallar la suite.** Con timeouts explícitos, y capturando también
+  `LinkageError`: pintar de rojo una corrida verde porque el servidor de mail
+  estaba caído es informar peor que no informar.
+
+El cuerpo lleva los casos fallados con su primer mensaje y un enlace al reporte,
+en vez del HTML de Extent adjunto: el adjunto pesa varios megas, muchos servidores
+lo bloquean, y obliga a bajarlo para saber si hace falta mirarlo.
+
+```bash
+export MAIL_SMTP_HOST=smtp.gmail.com MAIL_SMTP_PUERTO=587
+export MAIL_USUARIO=... MAIL_PASSWORD=...      # contraseña de aplicación
+export MAIL_DESTINATARIOS=equipo@ejemplo.com
+mvn test
+```
+
+Se verifica contra un SMTP en memoria (GreenMail) en un puerto libre, así que lo
+que está probado es el camino entero —conexión, sobre, asunto, cuerpo— sin casilla
+ni red.
+
 ## Cómo agregar algo
 
 Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
@@ -314,6 +406,8 @@ Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
 | Un dato para tests de UI | `fixtures/` | `ProductosFixture` (API) · `ClientesFixture` (base) |
 | Una consulta de verificacion | `sql/` + `projects/tienda/tests/` | `VerificacionesDbTest` |
 | Un caso que cruza capas | `projects/app/` | `CruceDeCapasTest` |
+| Accesibilidad de una pantalla | una línea en un caso que ya existe | `AccesibilidadTest` |
+| Un canal de notificación | `notifications/` + `listeners/NotificacionListener` | `EmailNotifier` |
 
 Lo que viene está en [ROADMAP.md](ROADMAP.md).
 

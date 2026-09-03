@@ -77,6 +77,25 @@ public final class AppApi {
                 .comoListaDe("title", String.class);
     }
 
+    /**
+     * Cuantos issues abiertos hay segun la API, sin recorrer paginas.
+     *
+     * Gitea devuelve el total en la cabecera X-Total-Count, asi que alcanza con
+     * pedir un elemento. Contar los de la primera pagina mediria el tamaño de
+     * pagina, que es exactamente el error que este metodo existe para no cometer.
+     */
+    public static int cantidadDeIssuesAbiertos() {
+        String total = ApiClient.getConToken(rutaIssues(), token(),
+                        Map.of("state", "open", "limit", 1))
+                .esExitosa()
+                .cabecera("X-Total-Count");
+        if (total == null) {
+            throw new FrameworkException("La API no devolvio X-Total-Count en " + rutaIssues()
+                    + ". Sin esa cabecera no hay forma de saber el total sin paginar.");
+        }
+        return Integer.parseInt(total.trim());
+    }
+
     public static ApiResponse listarIssues() {
         return ApiClient.getConToken(rutaIssues(), token(), Map.of("state", "all"));
     }

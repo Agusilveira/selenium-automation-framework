@@ -8,17 +8,13 @@ mapa de por dónde crece.
 
 ---
 
-## Notificaciones
+## Telegram
 
-**Paquete:** `notifications/` nuevo · **Toca:** `listeners/TestListener`
+**Paquete:** `notifications/` (ya existe) · **Toca:** `listeners/NotificacionListener`
 
-Resumen de la corrida a Telegram o mail cuando termina una suite. El listener ya
-tiene el `onFinish` donde engancharlo.
-
-- `notifications/TelegramNotifier` con token y chat por variable de entorno
-- `notifications/EmailNotifier` con el reporte de Extent adjunto
-- Enviar solo si hubo fallos, configurable: una notificación que llega siempre se
-  vuelve ruido y se ignora
+El mail ya está, y con él la parte difícil: `ResumenDeCorrida` no sabe por dónde
+se avisa. Sumar Telegram es una clase que recibe ese resumen y una línea en el
+listener. Token y chat por variable de entorno, como las credenciales de SMTP.
 
 ## Visual regression
 
@@ -28,13 +24,10 @@ Comparación de screenshots contra una línea base para detectar cambios visuale
 que ningún assert funcional captura. Necesita una estrategia de tolerancia y de
 actualización de la base, que es la parte difícil, no la comparación.
 
-## Accesibilidad
-
-**Paquete:** `a11y/` nuevo
-
-Inyectar axe-core y reportar violaciones WCAG. Se integra bien como un método más
-de `WebUI` (`WebUI.verificarAccesibilidad()`) para poder sumarlo a casos que ya
-existen sin escribir casos nuevos.
+`LineaBaseA11y` ya resolvió la mitad conceptual: archivo versionado, se falla solo
+por lo que empeoró, se regenera con una propiedad. Lo que no aporta es la
+tolerancia, que en imágenes no es un entero sino un umbral de píxeles distintos, y
+ahí es donde esto se pone difícil de verdad.
 
 ## Appium
 
@@ -69,6 +62,81 @@ vez de forzar una sola abstracción para los dos mundos.
 ## Resuelto
 
 Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### Accesibilidad con línea base
+
+`a11y/` inyecta axe-core y compara contra una línea base versionada por pantalla.
+`WebUI.verificarAccesibilidad("login")` se suma como una línea a un caso que ya
+existe, que es la única forma de que la pantalla se revise con datos y estado
+reales.
+
+La decisión de fondo fue la misma que ya había tomado `ContractGuard` sin que yo
+lo notara al empezar: **fallar solo por lo que empeoró**. Una aplicación que ya
+existe tiene violaciones legítimas y anteriores al cambio que se prueba; hacerlas
+fallar deja la suite roja el primer día, y no hacer fallar nada equivale a no
+probar. Guardar el estado conocido resuelve las dos.
+
+La línea base se sabotea a propósito en `LineaBaseA11yTest` —regla nueva, regla
+que crece, regla que mejora— y además se verificó sobre el navegador borrando
+`select-name` del archivo real: el caso falló nombrando la regla, su impacto y el
+enlace a la documentación.
+
+Lo primero que encontró sobre SauceDemo fue un `select-name` **crítico**: el
+desplegable de ordenamiento del listado no tiene nombre accesible. La página de
+login, en cambio, pasa limpia.
+
+Queda dicho en el README lo que axe no puede ver, porque un cero de axe se lee muy
+fácil como "la página es accesible" y no lo es: cubre alrededor del 30% de los
+problemas reales, los que se deciden mirando el DOM.
+
+### Notificaciones por mail
+
+`notifications/` con `ResumenDeCorrida` (qué pasó) y `EmailNotifier` (por dónde se
+avisa), separados a propósito: sumar otro canal no vuelve a recorrer los
+resultados de TestNG, y probar el formato del mensaje no necesita un SMTP.
+
+Va en un `ISuiteListener` y no en el `onFinish` de `TestListener`: ese corre una
+vez por bloque `test` del XML, y la regresión tiene tres. Serían tres mails de la
+misma corrida.
+
+**El test encontró dos cosas que el diseño no.** Verificar el envío contra un SMTP
+en memoria destapó un choque de classpath: `json-schema-validator` arrastra
+`com.sun.mail:mailapi`, de la era `javax.mail`, cuyo `META-INF/mailcap` registra
+manejadores que `jakarta.activation` intenta cargar al armar el mail.
+
+Lo obvio era excluir el jar, y **la exclusión rompió la validación contra JSON
+Schema**: la librería inicializa su tabla de formatos de golpe y uno de ellos
+referencia `javax.mail.internet`. Se revirtió. La convivencia se resuelve
+nombrando el manejador correcto por programa, que tiene prioridad sobre lo leído
+de archivos, y queda en una línea dentro de `EmailNotifier` en vez de en el árbol
+de dependencias de todos.
+
+Lo segundo: el `NoClassDefFoundError` es un `Error`, no un `RuntimeException`, así
+que atravesaba el `catch` y se llevaba puesta la suite entera. Un notificador que
+promete no afectar la corrida tiene que cumplirlo también cuando el problema es el
+classpath.
+
+### Un test que medía el tamaño de página
+
+Salió de correr la suite del cruce entre capas contra una base que había quedado
+con varias corridas encima, cosa que en CI nunca pasa porque arranca vacía.
+
+`lasTresCapasCoincidenEnElConteo` comparaba **las filas visibles del listado**
+contra el `COUNT` de la base. Con pocos issues coincidían y el caso pasaba; con 23
+la interfaz mostraba 20, porque pagina de a 20. El test no medía el total, medía
+el tamaño de página, y llevaba así desde que se escribió.
+
+Arreglarlo bajando la comparación a "la interfaz muestra al menos" habría sido
+esconderlo. Lo que corresponde es que **cada capa dé su total de la forma en que
+esa capa sabe darlo**: la base con un `COUNT`, la API con la cabecera
+`X-Total-Count` —pedir un elemento alcanza—, y la interfaz con el contador de la
+pestaña, que es lo que la aplicación le afirma a una persona. Las tres son exactas
+y ninguna depende de cuántos entren en una pantalla.
+
+De paso quedó una capacidad que faltaba: `ApiResponse.cabecera(...)`. No todo lo
+que hay que afirmar está en el cuerpo —totales de paginación, límites de
+peticiones, identificadores de correlación—, y hasta ahora había que bajar al
+`Response` de RestAssured para leerlo.
 
 ### La aplicación propia y el cruce entre capas
 

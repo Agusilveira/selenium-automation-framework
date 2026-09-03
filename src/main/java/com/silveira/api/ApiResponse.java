@@ -51,6 +51,18 @@ public final class ApiResponse {
         return response.asString();
     }
 
+    /**
+     * Una cabecera de la respuesta, o null si no vino.
+     *
+     * No todo lo que hace falta afirmar está en el cuerpo: el total real de una
+     * lista paginada, el límite de peticiones que queda, el identificador de
+     * correlación para buscar en los logs del servidor. Todo eso viaja en
+     * cabeceras, y sin esto había que bajar a `response()` para leerlas.
+     */
+    public String cabecera(String nombre) {
+        return response.getHeader(nombre);
+    }
+
     public long tiempoMs() {
         return response.timeIn(java.util.concurrent.TimeUnit.MILLISECONDS);
     }

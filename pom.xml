@@ -28,6 +28,9 @@
     <testcontainers.version>1.21.3</testcontainers.version>
     <postgresql.version>42.7.7</postgresql.version>
     <hikari.version>6.3.0</hikari.version>
+    <axe.version>4.10.1</axe.version>
+    <angusmail.version>2.0.3</angusmail.version>
+    <greenmail.version>2.1.3</greenmail.version>
 
     <suiteXmlFile>src/test/resources/suites/regression.xml</suiteXmlFile>
   </properties>
@@ -121,6 +124,12 @@
       <groupId>io.rest-assured</groupId>
       <artifactId>json-schema-validator</artifactId>
       <version>${restassured.version}</version>
+      <!-- Arrastra com.sun.mail:mailapi, de la era javax.mail, que choca con el
+           jakarta.mail de las notificaciones. Excluirlo parece lo obvio y no se
+           puede: json-schema-validator inicializa su tabla de formatos de golpe y
+           uno de ellos referencia javax.mail.internet, asi que sin el jar toda
+           validacion contra JSON Schema muere con NoClassDefFoundError. La
+           convivencia se resuelve en EmailNotifier, no aca. -->
     </dependency>
 
     <dependency>
@@ -139,6 +148,29 @@
       <groupId>org.testcontainers</groupId>
       <artifactId>postgresql</artifactId>
       <version>${testcontainers.version}</version>
+    </dependency>
+
+    <!-- axe-core: el mismo motor que usan las extensiones de navegador y los
+         lectores de auditoria. Escribir las reglas WCAG a mano no es una opcion. -->
+    <dependency>
+      <groupId>com.deque.html.axe-core</groupId>
+      <artifactId>selenium</artifactId>
+      <version>${axe.version}</version>
+    </dependency>
+
+    <!-- SMTP para las notificaciones. angus-mail arrastra jakarta.mail-api. -->
+    <dependency>
+      <groupId>org.eclipse.angus</groupId>
+      <artifactId>angus-mail</artifactId>
+      <version>${angusmail.version}</version>
+    </dependency>
+    <!-- Servidor SMTP en memoria: permite verificar que el mail sale de verdad
+         sin depender de una casilla real ni de la red. -->
+    <dependency>
+      <groupId>com.icegreen</groupId>
+      <artifactId>greenmail</artifactId>
+      <version>${greenmail.version}</version>
+      <scope>test</scope>
     </dependency>
 
   </dependencies>

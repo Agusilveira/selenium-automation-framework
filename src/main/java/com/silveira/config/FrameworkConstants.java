@@ -17,6 +17,7 @@ public final class FrameworkConstants {
     public static final String RUTA_DATA     = RECURSOS_TEST + "data/";
     public static final String RUTA_SCHEMAS   = RECURSOS_TEST + "schemas/";
     public static final String RUTA_CONTRACTS = RECURSOS_TEST + "contracts/";
+    public static final String RUTA_A11Y      = RECURSOS_TEST + "a11y/";
 
     public static final String RUTA_REPORTES  = "reports/";
     public static final String RUTA_EVIDENCIA = "evidence/";

@@ -43,7 +43,8 @@ public final class ConfigManager {
         return instancia;
     }
 
-    private static String perfilActivo() {
+    /** Nombre del perfil en uso. Sirve para decir en un reporte contra que se corrio. */
+    public static String perfilActivo() {
         String perfil = System.getProperty("env");
         if (esVacio(perfil)) perfil = System.getenv("TEST_ENV");
         return esVacio(perfil) ? "local" : perfil;

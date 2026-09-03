@@ -3,9 +3,11 @@
 <suite name="Unitarios del framework" verbose="1">
     <test name="Logica pura y driver">
         <packages>
+            <package name="com.silveira.a11y"/>
             <package name="com.silveira.config"/>
             <package name="com.silveira.driver"/>
             <package name="com.silveira.helpers"/>
+            <package name="com.silveira.notifications"/>
             <package name="com.silveira.utils"/>
         </packages>
     </test>

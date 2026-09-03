@@ -7,12 +7,17 @@
         <listener class-name="com.silveira.listeners.AnnotationTransformer"/>
         <listener class-name="com.silveira.listeners.SoftFailureListener"/>
         <listener class-name="com.silveira.listeners.FallbackGuardListener"/>
+        <!-- Avisa por mail al terminar. Sin MAIL_SMTP_HOST en el entorno no hace
+             nada, asi que un clone limpio corre igual. -->
+        <listener class-name="com.silveira.listeners.NotificacionListener"/>
     </listeners>
 
     <test name="Unitarios del framework">
         <packages>
+            <package name="com.silveira.a11y"/>
             <package name="com.silveira.config"/>
             <package name="com.silveira.helpers"/>
+            <package name="com.silveira.notifications"/>
             <package name="com.silveira.utils"/>
         </packages>
     </test>
