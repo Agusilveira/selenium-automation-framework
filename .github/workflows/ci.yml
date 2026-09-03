@@ -43,6 +43,33 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Sin navegador: 17 casos en segundos. Corre aparte para que un problema
+      # de UI no tape un problema de API ni al reves.
+      - name: Correr la suite de API
+        env:
+          TEST_ENV: ci
+        run: mvn -B test -DsuiteXmlFile=src/test/resources/suites/api.xml
+
+      - name: Publicar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-api
+          path: reports/
+          retention-days: 30
+          if-no-files-found: ignore
+
   cucumber:
     name: Cucumber
     runs-on: ubuntu-latest

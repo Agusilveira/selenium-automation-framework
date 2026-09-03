@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Suite propia y sin navegador: 20 casos de API corren en segundos, no en
+     minutos levantando un Chrome por caso para no usarlo. -->
+<suite name="API" verbose="1" parallel="methods" thread-count="4">
+
+    <listeners>
+        <listener class-name="com.silveira.listeners.TestListener"/>
+        <listener class-name="com.silveira.listeners.AnnotationTransformer"/>
+        <listener class-name="com.silveira.listeners.SoftFailureListener"/>
+        <listener class-name="com.silveira.listeners.FallbackGuardListener"/>
+    </listeners>
+
+    <test name="DummyJSON">
+        <packages>
+            <package name="com.silveira.projects.dummyjson.tests"/>
+        </packages>
+    </test>
+</suite>

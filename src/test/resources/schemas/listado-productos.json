@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Listado paginado de productos",
+  "type": "object",
+  "required": ["products", "total", "skip", "limit"],
+  "properties": {
+    "products": { "type": "array", "items": { "type": "object", "required": ["id", "title"] } },
+    "total":    { "type": "integer", "minimum": 0 },
+    "skip":     { "type": "integer", "minimum": 0 },
+    "limit":    { "type": "integer", "minimum": 0 }
+  }
+}
