@@ -41,6 +41,7 @@ public final class ApiClient {
                 .setContentType(ContentType.JSON)
                 .setAccept(ContentType.JSON)
                 .addFilter(new ApiLogFilter())
+                .addFilter(new RateLimitFilter())
                 .setConfig(RestAssuredConfig.config().httpClient(
                         HttpClientConfig.httpClientConfig()
                                 .setParam("http.connection.timeout", timeoutMs)

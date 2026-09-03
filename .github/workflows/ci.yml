@@ -161,7 +161,7 @@ jobs:
       # necesita ademas que la aplicacion responda por HTTP: son dos cosas
       # distintas y saltearse la segunda da errores que parecen del framework.
       - name: Preparar usuario, token y datos
-        run: ./scripts/preparar-app.sh
+        run: bash scripts/preparar-app.sh
 
       - name: Correr el cruce entre capas
         env:
