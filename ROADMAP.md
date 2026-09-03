@@ -8,18 +8,6 @@ mapa de por dónde crece.
 
 ---
 
-## Base de datos
-
-**Paquete:** `helpers/DatabaseHelper` · **Toca:** `pom.xml`, `config/`
-
-Consultas JDBC para verificar en la base lo que la interfaz dice que pasó. Un
-checkout que muestra "gracias por tu compra" pero no dejó la orden en la base es
-un test que pasa y un bug que se escapa.
-
-- Conexión desde `ConfigManager` (`db.url`, `db.user`, `db.password`)
-- `consultar(sql)` devolviendo `List<Map<String,String>>`, igual que `ExcelHelper`
-- Las credenciales por variable de entorno, nunca versionadas
-
 ## Selenium Grid en Docker
 
 **Toca:** `docker-compose.yml` nuevo, `driver/TargetFactory` (ya está listo)
@@ -84,10 +72,12 @@ vez de forzar una sola abstracción para los dos mundos.
   están más arriba en esta lista. Se deja declarado porque `TargetFactory` ya
   contempla `Target.GRID` y ahí es donde va a hacer falta.
 
-- **El caso completo de "creo por API, verifico por UI" no está demostrado.**
-  Requiere una app que tenga API y UI: SauceDemo no tiene API y DummyJSON no tiene
-  UI. Lo que sí está es el puente (`fixtures/`), y el patrón completo se puede
-  demostrar cuando se resuelva el ítem de Docker.
+- **El cruce completo entre capas no está demostrado.** "Compro por UI, verifico
+  por API, confirmo en la base" necesita una app cuyas tres caras sean nuestras:
+  SauceDemo no tiene API, DummyJSON no tiene UI, y la base de `tienda` no la
+  escribe ninguna aplicación. Las tres capas existen y funcionan por separado, y
+  los fixtures son el puente. El cruce se puede demostrar cuando se resuelva el
+  ítem de Selenium Grid en Docker, que trae la infraestructura necesaria.
 
 - **`clickHasta` reintenta hasta 3 veces.** Ahora verifica que el disparador siga
   presente antes de reintentar, así que no repite una acción que ya ocurrió. Pero
@@ -100,6 +90,26 @@ vez de forzar una sola abstracción para los dos mundos.
 ## Resuelto
 
 Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### Base de datos
+
+`db/` con `DatabaseManager` (pool), `DatabaseHelper` (PreparedStatement,
+transacciones, conteos) y `SqlLoader`, corriendo contra un Postgres real
+levantado por Testcontainers.
+
+Dos decisiones que salieron de probar los caminos, no de suponerlos:
+
+**La suite corre aparte.** Requiere Docker, y el resto del framework no. Meterla
+en la regresión habría roto la promesa de `git clone && mvn test`.
+
+**Omitir en CI habría sido una mentira.** La primera versión omitía los casos si
+Docker faltaba, en todos los entornos. Al probarlo salió el problema: en CI eso
+deja el job en verde sin haber probado nada, igual que un `testFailureIgnore`.
+Ahora depende del perfil, y los dos caminos están verificados rompiendo el
+arranque del contenedor a propósito.
+
+`ClientesFixture` cierra el patrón que abrió `ProductosFixture`: uno trae datos
+por SQL y el otro por HTTP, y quien los consume no distingue.
 
 ### Testing de API
 

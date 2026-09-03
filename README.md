@@ -8,7 +8,7 @@ runner principal y **Cucumber** como camino opcional.
 El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
 demostración de que funciona, no el objetivo.
 
-**41 clases de framework · UI y API · 58 casos de UI y 17 de API · suites paralelas · CI en dos navegadores**
+**45 clases de framework · UI, API y base de datos · 58 casos de UI, 17 de API y 11 de base · CI en cinco jobs**
 
 ## Correrlo
 
@@ -24,6 +24,7 @@ No hay drivers que descargar: Selenium Manager los resuelve en runtime.
 mvn test -DsuiteXmlFile=src/test/resources/suites/smoke.xml      # camino crítico
 mvn test -DsuiteXmlFile=src/test/resources/suites/parallel.xml   # 4 hilos
 mvn test -DsuiteXmlFile=src/test/resources/suites/api.xml        # solo API, sin navegador
+mvn test -DsuiteXmlFile=src/test/resources/suites/db.xml         # base de datos (requiere Docker)
 mvn test -Pcucumber                                              # los features
 mvn test -DBROWSER=firefox -DTEST_ENV=ci                         # override de config
 ```
@@ -37,6 +38,7 @@ src/main/java/com/silveira/          EL FRAMEWORK
 ├── enums/           Browser · Target · Platform · FailureHandling
 ├── exceptions/      FrameworkException y 4 derivadas
 ├── api/             ApiClient · ApiResponse · AuthManager · ContractGuard · Paginador · ApiLogFilter
+├── db/              DatabaseManager · DatabaseHelper · SqlLoader
 ├── keywords/        WebUI · WaitUtils · AlertUtils · FrameUtils · WindowUtils · TableUtils
 ├── helpers/         Properties · Locator · Json · Excel · File · Capture
 ├── utils/           Log · Date · FakeData · BrowserInfo
@@ -44,19 +46,20 @@ src/main/java/com/silveira/          EL FRAMEWORK
 └── annotations/     FrameworkAnnotation
 
 src/test/java/com/silveira/          QUIEN LO USA
-├── common/          BaseTest · BaseApiTest
+├── common/          BaseTest · BaseApiTest · BaseDbTest
 ├── listeners/       TestListener · RetryAnalyzer · AnnotationTransformer
 ├── dataprovider/    DataProviderManager
-├── fixtures/        datos para tests de UI, obtenidos por API
-├── projects/        SauceDemo · the-internet · DummyJSON (API)
+├── fixtures/        datos para otros tests: ProductosFixture (API) · ClientesFixture (base)
+├── projects/        SauceDemo · the-internet · DummyJSON (API) · tienda (base)
 └── cucumber/        runner, steps y hooks sobre las mismas páginas
 
 src/test/resources/
 ├── config/          un .properties por ambiente
-├── suites/          smoke · regression · parallel · api · cucumber · unit
+├── suites/          smoke · regression · parallel · api · db · cucumber · unit
 ├── objects/         locators externalizados
 ├── schemas/         JSON Schema de las respuestas
 ├── contracts/       contratos versionados de los endpoints
+├── sql/             esquema, datos y consultas fuera del codigo Java
 └── data/            JSON y Excel para los DataProviders
 ```
 
@@ -198,6 +201,40 @@ quien no lo conoce lo ignora. Que **desaparezca**, o que **cambie de tipo**, rom
 a todos los que lo leían. El contrato vive versionado en `contracts/`, así que un
 cambio deja rastro en el historial.
 
+### La base de datos responde lo que una pantalla no puede
+
+Un checkout que muestra "gracias por tu compra" pero no dejó la orden en la base
+es un test de UI que pasa y un bug que se escapa. `DatabaseHelper` hace esas
+preguntas: ¿el total de la orden coincide con la suma de sus ítems? ¿un cliente
+dado de baja tiene pendientes? ¿un producto sin stock aparece en órdenes activas?
+
+Corre contra un **Postgres real** levantado por Testcontainers, no contra una base
+embebida: el dialecto, los tipos y el comportamiento transaccional son los de
+producción. Un contenedor por suite, no por caso.
+
+**La suite de base corre aparte porque requiere Docker.** `mvn test` sigue
+funcionando sin él, así que la promesa de clonar y correr se mantiene.
+
+Y qué pasa si Docker no está depende del perfil: **en local omite** con el motivo,
+**en CI rompe el build**. Omitir en CI dejaría el job en verde sin haber probado
+nada, que es la misma mentira que un `testFailureIgnore`. Los dos caminos se
+verificaron rompiendo el arranque del contenedor a propósito.
+
+### Los fixtures no dicen de dónde vienen los datos
+
+```java
+ProductosFixture.algunos(3);              // detrás hay HTTP
+ClientesFixture.usuarioActivo();          // detrás hay SQL
+```
+
+Los dos exponen métodos en lenguaje de dominio, y quien los consume no sabe cuál
+es cuál. Esa simetría es lo que hace que la abstracción sirva: cambiar la fuente
+de un dato toca un archivo y ningún test.
+
+`DatabaseHelper` devuelve `List<Map<String,String>>`, la misma forma que
+`ExcelHelper`. Un `@DataProvider` puede pasar de leer una planilla a leer la base
+sin que ningún test lo note.
+
 ## Cómo agregar algo
 
 Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
@@ -211,7 +248,8 @@ Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
 | Un destino de reporte | `reports/` | `AllureManager` |
 | Un proyecto nuevo | `projects/<nombre>/` + `objects/<nombre>.properties` | `projects/theinternet` |
 | Un endpoint a probar | `projects/<api>/tests/` + `schemas/` | `projects/dummyjson` |
-| Un dato para tests de UI | `fixtures/` | `ProductosFixture` |
+| Un dato para tests de UI | `fixtures/` | `ProductosFixture` (API) · `ClientesFixture` (base) |
+| Una consulta de verificacion | `sql/` + `projects/tienda/tests/` | `VerificacionesDbTest` |
 
 Lo que viene está en [ROADMAP.md](ROADMAP.md).
 
