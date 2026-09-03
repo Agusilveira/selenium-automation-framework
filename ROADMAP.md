@@ -53,13 +53,6 @@ vez de forzar una sola abstracción para los dos mundos.
   están más arriba en esta lista. Se deja declarado porque `TargetFactory` ya
   contempla `Target.GRID` y ahí es donde va a hacer falta.
 
-- **El cruce completo entre capas no está demostrado.** "Compro por UI, verifico
-  por API, confirmo en la base" necesita una app cuyas tres caras sean nuestras:
-  SauceDemo no tiene API, DummyJSON no tiene UI, y la base de `tienda` no la
-  escribe ninguna aplicación. Las tres capas existen y funcionan por separado, y
-  los fixtures son el puente. El cruce se puede demostrar cuando se resuelva el
-  ítem de Selenium Grid en Docker, que trae la infraestructura necesaria.
-
 - **`clickHasta` reintenta una vez.** Verifica que el disparador siga presente
   antes de reintentar, así que no repite una acción que ya ocurrió. Pero si un
   botón sigue visible después de un click que tuvo efecto parcial, el reintento es
@@ -76,6 +69,34 @@ vez de forzar una sola abstracción para los dos mundos.
 ## Resuelto
 
 Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### La aplicación propia y el cruce entre capas
+
+`docker-compose.app.yml` levanta Gitea con Postgres: interfaz, API REST y base del
+mismo sistema. `preparar-app.sh` la deja usable sin pasos manuales.
+
+Era el último límite anotado, y el único que no se podía sortear buscando algo
+público: hay demos con interfaz y API, pero **ninguna expone su base de datos**, y
+con razón. Para preguntarle algo a la base hay que ser quien la corre.
+
+Nada del código de la aplicación entra al repositorio: solo la receta para
+levantarla.
+
+Los tres fallos que tuvo la primera corrida fueron todos de condiciones de espera
+mal elegidas, y dos merecen quedar anotados:
+
+**Esperar la URL equivocada.** Tras el login, Gitea redirige al panel de inicio y
+no al perfil. Lo resolvió el mensaje de error que `clickHasta` ya traía: *"el click
+tuvo efecto pero el resultado esperado nunca llegó, quedó en /"*. De ahí salieron
+`hastaQueLaUrlNoContenga`, para cuando importa haber salido de una página y no a
+cuál se llegó.
+
+**Una condición que se cumplía antes de empezar.** Crear un issue desde
+`/issues/new` esperando que la URL contenga `/issues/`: ya lo contenía. La espera
+pasaba al instante y el test creía que la acción había ocurrido. De ahí salió
+`hastaQueLaUrlCoincidaCon`, con expresión regular.
+
+Las dos son ahora capacidades del framework, no parches del proyecto.
 
 ### El costo del recurso a JavaScript
 

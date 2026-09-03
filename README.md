@@ -8,7 +8,7 @@ runner principal y **Cucumber** como camino opcional.
 El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
 demostración de que funciona, no el objetivo.
 
-**45 clases de framework · UI, API y base de datos · local o Selenium Grid · CI en siete jobs**
+**48 clases de framework · UI, API y base de datos, cruzadas sobre una misma app · CI en ocho jobs**
 
 ## Correrlo
 
@@ -26,6 +26,7 @@ mvn test -DsuiteXmlFile=src/test/resources/suites/parallel.xml   # 4 hilos
 mvn test -DsuiteXmlFile=src/test/resources/suites/api.xml        # solo API, sin navegador
 mvn test -DsuiteXmlFile=src/test/resources/suites/db.xml         # base de datos (requiere Docker)
 mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid   # contra el Grid
+mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app     # cruce entre capas
 mvn test -Pcucumber                                              # los features
 mvn test -DBROWSER=firefox -DTEST_ENV=ci                         # override de config
 ```
@@ -47,16 +48,16 @@ src/main/java/com/silveira/          EL FRAMEWORK
 └── annotations/     FrameworkAnnotation
 
 src/test/java/com/silveira/          QUIEN LO USA
-├── common/          BaseTest · BaseApiTest · BaseDbTest
+├── common/          BaseTest · BaseApiTest · BaseDbTest · BaseAppTest
 ├── listeners/       TestListener · RetryAnalyzer · AnnotationTransformer
 ├── dataprovider/    DataProviderManager
 ├── fixtures/        datos para otros tests: ProductosFixture (API) · ClientesFixture (base)
-├── projects/        SauceDemo · the-internet · DummyJSON (API) · tienda (base)
+├── projects/        SauceDemo · the-internet · DummyJSON (API) · tienda (base) · app (las tres)
 └── cucumber/        runner, steps y hooks sobre las mismas páginas
 
 src/test/resources/
 ├── config/          un .properties por ambiente
-├── suites/          smoke · regression · parallel · api · db · grid · cucumber · unit
+├── suites/          smoke · regression · parallel · api · db · grid · app · cucumber · unit
 ├── objects/         locators externalizados
 ├── schemas/         JSON Schema de las respuestas
 ├── contracts/       contratos versionados de los endpoints
@@ -263,6 +264,40 @@ Grid es **demostrativo, no necesario**. Su valor real acá fue otro — era lo �
 que ejercitaba la rama `GRID` de `TargetFactory`, que compilaba desde el primer
 día y no la corría nadie.
 
+### El cruce entre capas
+
+Es lo que el framework no podía demostrar hasta tener una aplicación cuyas tres
+caras fueran suyas: SauceDemo no tiene API, DummyJSON no tiene interfaz, y a la
+base de una app pública no se llega.
+
+```bash
+docker compose -f docker-compose.app.yml up -d
+./scripts/preparar-app.sh
+mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app
+```
+
+Levanta Gitea con Postgres. **El código de la aplicación no vive en este
+repositorio**: solo el compose que baja las imágenes y el script que la prepara.
+
+Con eso, una acción hecha por un camino se verifica por los otros dos:
+
+```java
+int numero = AppApi.crearIssue(titulo, cuerpo).tieneCodigo(201).campo("number");
+
+assertThat(issuesEnLaBaseConTitulo(titulo)).isEqualTo(1);   // la fila existe
+
+app.ingresar();
+assertThat(app.existeElIssueConTitulo(titulo)).isTrue();    // y se ve en pantalla
+```
+
+Por qué importa: un checkout que muestra "gracias por tu compra" pero no dejó la
+orden en la base es un test de interfaz que pasa y un bug que llega a producción.
+Ninguna de las tres capas por separado lo detecta.
+
+El token de API lo genera el script y queda en un archivo ignorado por git. Una
+credencial dentro del repositorio es una credencial filtrada, aunque la aplicación
+corra en localhost.
+
 ## Cómo agregar algo
 
 Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
@@ -278,6 +313,7 @@ Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
 | Un endpoint a probar | `projects/<api>/tests/` + `schemas/` | `projects/dummyjson` |
 | Un dato para tests de UI | `fixtures/` | `ProductosFixture` (API) · `ClientesFixture` (base) |
 | Una consulta de verificacion | `sql/` + `projects/tienda/tests/` | `VerificacionesDbTest` |
+| Un caso que cruza capas | `projects/app/` | `CruceDeCapasTest` |
 
 Lo que viene está en [ROADMAP.md](ROADMAP.md).
 
