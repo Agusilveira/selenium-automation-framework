@@ -1,8 +1,10 @@
 package com.silveira.keywords;
 
+import com.silveira.config.ConfigManager;
 import com.silveira.driver.DriverManager;
 import com.silveira.exceptions.FrameworkException;
 import com.silveira.utils.LogUtils;
+import org.openqa.selenium.JavascriptExecutor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,6 +14,27 @@ import java.util.Set;
 public final class WindowUtils {
 
     private WindowUtils() {
+    }
+
+    /**
+     * Espera a que la ventana recien enfocada tenga contenido real.
+     *
+     * Cambiar de ventana es instantaneo, cargarla no. Sin esta espera, leer el
+     * titulo justo despues del switch devuelve vacio.
+     *
+     * No alcanza con document.readyState: Firefox abre la pestaña en about:blank y
+     * navega despues, y about:blank ya reporta "complete". Por eso la condicion
+     * incluye haber salido de about:blank. Chrome no expone el problema porque
+     * navega antes de que el handle este disponible, asi que esto solo aparece en
+     * el navegador que uno no estaba mirando.
+     */
+    private static void esperarQueCargue() {
+        WaitUtils.hasta(driver -> {
+            String url = driver.getCurrentUrl();
+            if (url == null || url.isBlank() || url.startsWith("about:")) return false;
+            return "complete".equals(
+                    ((JavascriptExecutor) driver).executeScript("return document.readyState"));
+        }, ConfigManager.get().explicitTimeout());
     }
 
     public static Set<String> handles() {
@@ -34,6 +57,7 @@ public final class WindowUtils {
                     + ". Hay " + ventanas.size() + " ventana(s) abierta(s).");
         }
         DriverManager.get().switchTo().window(ventanas.get(indice));
+        esperarQueCargue();
         LogUtils.info("Cambiando a la ventana " + indice);
     }
 
@@ -41,6 +65,7 @@ public final class WindowUtils {
         String original = handleActual();
         for (String handle : handles()) {
             DriverManager.get().switchTo().window(handle);
+            esperarQueCargue();
             if (DriverManager.get().getTitle().contains(titulo)) {
                 LogUtils.info("Cambiando a la ventana con título '" + titulo + "'");
                 return;
