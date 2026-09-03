@@ -8,7 +8,7 @@ runner principal y **Cucumber** como camino opcional.
 El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
 demostración de que funciona, no el objetivo.
 
-**45 clases de framework · UI, API y base de datos · 58 casos de UI, 17 de API y 11 de base · CI en cinco jobs**
+**45 clases de framework · UI, API y base de datos · local o Selenium Grid · CI en siete jobs**
 
 ## Correrlo
 
@@ -25,6 +25,7 @@ mvn test -DsuiteXmlFile=src/test/resources/suites/smoke.xml      # camino críti
 mvn test -DsuiteXmlFile=src/test/resources/suites/parallel.xml   # 4 hilos
 mvn test -DsuiteXmlFile=src/test/resources/suites/api.xml        # solo API, sin navegador
 mvn test -DsuiteXmlFile=src/test/resources/suites/db.xml         # base de datos (requiere Docker)
+mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid   # contra el Grid
 mvn test -Pcucumber                                              # los features
 mvn test -DBROWSER=firefox -DTEST_ENV=ci                         # override de config
 ```
@@ -55,7 +56,7 @@ src/test/java/com/silveira/          QUIEN LO USA
 
 src/test/resources/
 ├── config/          un .properties por ambiente
-├── suites/          smoke · regression · parallel · api · db · cucumber · unit
+├── suites/          smoke · regression · parallel · api · db · grid · cucumber · unit
 ├── objects/         locators externalizados
 ├── schemas/         JSON Schema de las respuestas
 ├── contracts/       contratos versionados de los endpoints
@@ -234,6 +235,29 @@ de un dato toca un archivo y ningún test.
 `DatabaseHelper` devuelve `List<Map<String,String>>`, la misma forma que
 `ExcelHelper`. Un `@DataProvider` puede pasar de leer una planilla a leer la base
 sin que ningún test lo note.
+
+### El mismo suite corre local o contra un Grid
+
+```bash
+docker compose -f docker-compose.grid.yml up -d
+mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid
+```
+
+Hub y nodos Chrome y Firefox en contenedores, con las versiones fijadas. Un
+`latest` haría que la misma suite corra contra navegadores distintos según el
+día, y cuando algo falla no se sabría si cambió el código o cambió el navegador.
+
+Lo que cambia en los tests: nada. `TargetFactory` devuelve un `RemoteWebDriver`
+en vez de un `ChromeDriver` y el resto del framework no se entera.
+
+**Los nodos graban video de cada sesión.** Para fallos de timing, donde el
+screenshot del final no dice qué pasó, es la diferencia entre diagnosticar y
+adivinar. En CI los videos se publican como artefacto junto al reporte.
+
+Vale ser honesto sobre el alcance: para 58 casos que corren en 90 segundos, el
+Grid es **demostrativo, no necesario**. Su valor real acá fue otro — era lo único
+que ejercitaba la rama `GRID` de `TargetFactory`, que compilaba desde el primer
+día y no la corría nadie.
 
 ## Cómo agregar algo
 

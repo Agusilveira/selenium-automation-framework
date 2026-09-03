@@ -8,15 +8,6 @@ mapa de por dónde crece.
 
 ---
 
-## Selenium Grid en Docker
-
-**Toca:** `docker-compose.yml` nuevo, `driver/TargetFactory` (ya está listo)
-
-`TargetFactory` ya soporta `Target.GRID`, pero no hay Grid contra el cual correr.
-Falta el `docker-compose` con hub y nodos, y un job de CI que lo levante.
-
-Es lo que convierte el `target=GRID` de una capacidad declarada en una demostrable.
-
 ## Notificaciones
 
 **Paquete:** `notifications/` nuevo · **Toca:** `listeners/TestListener`
@@ -28,16 +19,6 @@ tiene el `onFinish` donde engancharlo.
 - `notifications/EmailNotifier` con el reporte de Extent adjunto
 - Enviar solo si hubo fallos, configurable: una notificación que llega siempre se
   vuelve ruido y se ignora
-
-## Grabación de pantalla
-
-**Paquete:** `helpers/ScreenRecorderHelper` · **Toca:** `listeners/TestListener`
-
-Video del caso que falla, además del screenshot. Para fallos de timing —donde la
-foto del final no dice qué pasó— es la diferencia entre diagnosticar y adivinar.
-
-Ojo con el costo: grabar todo llena el disco rápido. Debería activarse por
-configuración y solo conservar los videos de los casos fallidos.
 
 ## Visual regression
 
@@ -79,6 +60,13 @@ vez de forzar una sola abstracción para los dos mundos.
   los fixtures son el puente. El cruce se puede demostrar cuando se resuelva el
   ítem de Selenium Grid en Docker, que trae la infraestructura necesaria.
 
+- **El recurso a JavaScript cuesta 12 segundos por click en el Grid.** Sobre el
+  Grid, los botones del checkout de SauceDemo necesitan JavaScript el 100% de las
+  veces, no intermitentemente. El framework igual hace 3 intentos de 4 segundos
+  antes de recurrir a él, así que `compraCompleta` pasa de 15 a 27 segundos. Una
+  memoria por corrida —"este locator ya necesitó JavaScript, no vuelvas a esperar
+  12 segundos"— lo resolvería, a costa de sumarle estado a `clickHasta`.
+
 - **`clickHasta` reintenta hasta 3 veces.** Ahora verifica que el disparador siga
   presente antes de reintentar, así que no repite una acción que ya ocurrió. Pero
   si un botón sigue visible después de un click que sí tuvo efecto parcial, el
@@ -90,6 +78,26 @@ vez de forzar una sola abstracción para los dos mundos.
 ## Resuelto
 
 Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### Selenium Grid en Docker
+
+`docker-compose.grid.yml` con hub y nodos Chrome y Firefox, perfil `grid`, suite
+propia y job de CI.
+
+Su valor no fue el que le había atribuido. Escribí que "destraba el cruce completo
+entre capas", y eso era falso: el cruce lo destraba tener una app cuyas tres caras
+sean nuestras, no el Grid. Eran dos ítems distintos mezclados bajo un título.
+
+Lo que sí aportó: era **lo único que ejercitaba la rama `GRID` de
+`TargetFactory`**, que compilaba desde el primer día sin que la corriera nadie —
+la misma deuda que tenían `FrameUtils` y `TableUtils`. Pasó a la primera, cosa que
+no esperaba después de los tres bugs anteriores.
+
+Y cerró de paso el ítem de **grabación de pantalla**: los nodos de Selenium graban
+video de cada sesión, así que no hizo falta escribir un grabador.
+
+Para 58 casos que corren en 90 segundos, el Grid es demostrativo y no necesario.
+Está bien que lo sea, pero conviene decirlo.
 
 ### Base de datos
 
