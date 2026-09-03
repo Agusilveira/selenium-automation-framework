@@ -8,19 +8,6 @@ mapa de por dónde crece.
 
 ---
 
-## Testing de API
-
-**Paquete:** `api/` nuevo · **Toca:** `pom.xml`, `config/`
-
-RestAssured para pegarle a endpoints. El valor real no es tener tests de API
-sueltos, sino usarlos como **precondición de los de UI**: crear un usuario por
-API y después probar el login por interfaz es más rápido y menos frágil que
-armarlo a mano en cada caso.
-
-- `api/ApiClient` con la URL base desde `ConfigManager`
-- `api/RequestBuilder` para autenticación y headers comunes
-- Un `BaseApiTest` paralelo a `BaseTest`, sin navegador
-
 ## Base de datos
 
 **Paquete:** `helpers/DatabaseHelper` · **Toca:** `pom.xml`, `config/`
@@ -97,6 +84,11 @@ vez de forzar una sola abstracción para los dos mundos.
   están más arriba en esta lista. Se deja declarado porque `TargetFactory` ya
   contempla `Target.GRID` y ahí es donde va a hacer falta.
 
+- **El caso completo de "creo por API, verifico por UI" no está demostrado.**
+  Requiere una app que tenga API y UI: SauceDemo no tiene API y DummyJSON no tiene
+  UI. Lo que sí está es el puente (`fixtures/`), y el patrón completo se puede
+  demostrar cuando se resuelva el ítem de Docker.
+
 - **`clickHasta` reintenta hasta 3 veces.** Ahora verifica que el disparador siga
   presente antes de reintentar, así que no repite una acción que ya ocurrió. Pero
   si un botón sigue visible después de un click que sí tuvo efecto parcial, el
@@ -108,6 +100,28 @@ vez de forzar una sola abstracción para los dos mundos.
 ## Resuelto
 
 Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### Testing de API
+
+`api/` sobre RestAssured, con `ApiClient`, `AuthManager` (token por hilo),
+`ApiResponse` con aserciones que incluyen el cuerpo en el mensaje de fallo,
+validación contra JSON Schema, `Paginador` y `ContractGuard`.
+
+Dos decisiones que definieron la forma:
+
+**La capa no envuelve RestAssured por envolverlo.** Lo que agrega es que cada
+intercambio HTTP quede en el reporte automáticamente, con las cabeceras sensibles
+enmascaradas. Cuando un test de API falla, eso es lo único que importa.
+
+**Los tests de API y los fixtures son cosas distintas aunque compartan
+transporte.** En `projects/dummyjson/` la API es el sujeto bajo prueba; en
+`fixtures/` es una herramienta para conseguir datos. Un test de UI pide
+`ProductosFixture.algunos(3)` y no sabe que salió de HTTP, así que cambiar la
+fuente no toca ningún test.
+
+`ContractGuard` se verificó saboteando un contrato a propósito: detectó el campo
+faltante y el cambio de tipo con el mensaje exacto. Un guardián que nunca falló no
+está probado.
 
 ### `FailureHandling` operativo
 

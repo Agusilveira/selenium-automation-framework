@@ -8,7 +8,7 @@ runner principal y **Cucumber** como camino opcional.
 El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
 demostración de que funciona, no el objetivo.
 
-**36 clases de framework · 57 casos sobre dos proyectos · suites paralelas · CI en dos navegadores**
+**41 clases de framework · UI y API · 58 casos de UI y 17 de API · suites paralelas · CI en dos navegadores**
 
 ## Correrlo
 
@@ -23,6 +23,7 @@ No hay drivers que descargar: Selenium Manager los resuelve en runtime.
 ```bash
 mvn test -DsuiteXmlFile=src/test/resources/suites/smoke.xml      # camino crítico
 mvn test -DsuiteXmlFile=src/test/resources/suites/parallel.xml   # 4 hilos
+mvn test -DsuiteXmlFile=src/test/resources/suites/api.xml        # solo API, sin navegador
 mvn test -Pcucumber                                              # los features
 mvn test -DBROWSER=firefox -DTEST_ENV=ci                         # override de config
 ```
@@ -35,6 +36,7 @@ src/main/java/com/silveira/          EL FRAMEWORK
 ├── driver/          DriverManager · BrowserFactory · TargetFactory
 ├── enums/           Browser · Target · Platform · FailureHandling
 ├── exceptions/      FrameworkException y 4 derivadas
+├── api/             ApiClient · ApiResponse · AuthManager · ContractGuard · Paginador · ApiLogFilter
 ├── keywords/        WebUI · WaitUtils · AlertUtils · FrameUtils · WindowUtils · TableUtils
 ├── helpers/         Properties · Locator · Json · Excel · File · Capture
 ├── utils/           Log · Date · FakeData · BrowserInfo
@@ -42,16 +44,19 @@ src/main/java/com/silveira/          EL FRAMEWORK
 └── annotations/     FrameworkAnnotation
 
 src/test/java/com/silveira/          QUIEN LO USA
-├── common/          BaseTest
+├── common/          BaseTest · BaseApiTest
 ├── listeners/       TestListener · RetryAnalyzer · AnnotationTransformer
 ├── dataprovider/    DataProviderManager
-├── projects/        dos proyectos de ejemplo: SauceDemo y the-internet
+├── fixtures/        datos para tests de UI, obtenidos por API
+├── projects/        SauceDemo · the-internet · DummyJSON (API)
 └── cucumber/        runner, steps y hooks sobre las mismas páginas
 
 src/test/resources/
 ├── config/          un .properties por ambiente
-├── suites/          smoke · regression · parallel · cucumber · unit
+├── suites/          smoke · regression · parallel · api · cucumber · unit
 ├── objects/         locators externalizados
+├── schemas/         JSON Schema de las respuestas
+├── contracts/       contratos versionados de los endpoints
 └── data/            JSON y Excel para los DataProviders
 ```
 
@@ -155,6 +160,44 @@ verlos todos de una en vez de arreglar de a uno.
 fallos tolerados. Sin esa pieza, `CONTINUE_ON_FAILURE` sería una forma elegante de
 esconder errores.
 
+### UI y API separadas, con un puente explícito
+
+Son dos capas con bases distintas: `BaseTest` levanta navegador, `BaseApiTest` no.
+Los 17 casos de API corren en 6 segundos; forzarlos por la base de UI sería
+levantar 17 Chrome para no usarlos.
+
+Lo que las conecta es `fixtures/`, y la distinción importa:
+
+| | La API es… | Vive en | Corre en |
+|---|---|---|---|
+| Tests de API | el sujeto bajo prueba | `projects/dummyjson/` | suite `api` |
+| Fixtures | una herramienta para conseguir datos | `fixtures/` | los usan tests de UI |
+
+Un test de UI llama a `ProductosFixture.algunos(3)` y no sabe que eso salió de
+HTTP. Si mañana el dato viene de una base de datos, cambia el fixture y ningún
+test se entera. Si la API no responde, el error dice que **falló una precondición**,
+no que falló la aplicación bajo prueba.
+
+### El intercambio HTTP siempre queda en el reporte
+
+`ApiLogFilter` adjunta request y response completos a cada caso, sin que el test
+pida nada. Cuando un test de API falla, eso es exactamente lo que hace falta y lo
+único que evita tener que reproducirlo a mano.
+
+Las cabeceras sensibles se enmascaran: un reporte de CI circula, y un token pegado
+ahí es una credencial filtrada.
+
+### Contratos versionados, no solo esquemas
+
+El JSON Schema verifica que la respuesta tenga la forma esperada hoy.
+`ContractGuard` responde otra pregunta: ¿sigue siendo compatible con la que había
+cuando el contrato se acordó?
+
+Y solo reporta lo que rompe de verdad. Que **aparezca** un campo no rompe a nadie:
+quien no lo conoce lo ignora. Que **desaparezca**, o que **cambie de tipo**, rompe
+a todos los que lo leían. El contrato vive versionado en `contracts/`, así que un
+cambio deja rastro en el historial.
+
 ## Cómo agregar algo
 
 Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
@@ -167,6 +210,8 @@ Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
 | Un navegador | `enums/Browser` + `driver/BrowserFactory` | el caso `EDGE` |
 | Un destino de reporte | `reports/` | `AllureManager` |
 | Un proyecto nuevo | `projects/<nombre>/` + `objects/<nombre>.properties` | `projects/theinternet` |
+| Un endpoint a probar | `projects/<api>/tests/` + `schemas/` | `projects/dummyjson` |
+| Un dato para tests de UI | `fixtures/` | `ProductosFixture` |
 
 Lo que viene está en [ROADMAP.md](ROADMAP.md).
 
