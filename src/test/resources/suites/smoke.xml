@@ -5,6 +5,8 @@
     <listeners>
         <listener class-name="com.silveira.listeners.TestListener"/>
         <listener class-name="com.silveira.listeners.AnnotationTransformer"/>
+        <listener class-name="com.silveira.listeners.SoftFailureListener"/>
+        <listener class-name="com.silveira.listeners.FallbackGuardListener"/>
     </listeners>
 
     <test name="Camino critico">
@@ -14,5 +16,13 @@
         <packages>
             <package name="com.silveira.projects.saucedemo.tests"/>
         </packages>
+    </test>
+
+    <!-- Ultimo a proposito: mide el total de la corrida, asi que necesita correr
+         despues de todo lo demas. Los bloques <test> se ejecutan en orden. -->
+    <test name="Guardias del framework">
+        <classes>
+            <class name="com.silveira.guards.FallbackGuardTest"/>
+        </classes>
     </test>
 </suite>

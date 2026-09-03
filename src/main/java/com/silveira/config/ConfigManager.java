@@ -160,4 +160,22 @@ public final class ConfigManager {
     public int reintentos() {
         return getInt("retry.count", 0);
     }
+
+    /**
+     * Si el framework puede recurrir a JavaScript cuando un click o un sendKeys no
+     * produce efecto.
+     *
+     * Apagado en local y prendido en CI a proposito: en tu maquina un evento que no
+     * llega es casi siempre un bug del test y tiene que explotar en el momento; en
+     * un runner suele ser el entorno. Con el fallback prendido en los dos lados,
+     * las dos causas se ven igual y la primera queda tapada.
+     */
+    public boolean fallbackJsHabilitado() {
+        return Boolean.parseBoolean(get("webui.fallback.js.enabled", "false").trim());
+    }
+
+    /** Cuantos usos del fallback se toleran antes de fallar la suite. */
+    public int fallbackJsMaximo() {
+        return getInt("webui.fallback.js.max", 0);
+    }
 }

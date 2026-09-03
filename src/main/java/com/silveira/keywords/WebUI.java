@@ -1,7 +1,9 @@
 package com.silveira.keywords;
 
+import com.silveira.config.ConfigManager;
 import com.silveira.config.FrameworkConstants;
 import com.silveira.driver.DriverManager;
+import com.silveira.enums.FailureHandling;
 import com.silveira.exceptions.FrameworkException;
 import com.silveira.utils.LogUtils;
 import org.openqa.selenium.By;
@@ -86,19 +88,25 @@ public final class WebUI {
 
     /**
      * Click que además confirma su propio efecto, reintenta, y como último recurso
-     * usa JavaScript.
+     * invoca el elemento por JavaScript.
      *
-     * Un click que no produce efecto no es raro: en algunos entornos —Chrome
-     * headless en runners de CI, sobre todo— el evento no llega a la página.
-     * Selenium no lanza nada, el elemento está visible, habilitado y sin nada
-     * encima, y simplemente no pasa nada. Verificado instrumentando la página con
-     * un listener propio: el evento no llega, mientras que un click por JavaScript
-     * sobre el mismo elemento sí funciona.
+     * El último recurso existe por una limitación medida, no por precaución. En
+     * ciertos elementos, todo input mediado por WebDriver se pierde: ni
+     * element.click(), ni Actions.moveToElement().click(), ni enfocar y mandar
+     * ENTER producen un evento que llegue a la página. Instrumentando el documento
+     * con un listener propio, no llega nada. Y mientras tanto el elemento mide
+     * impecable: único que matchea el selector, conectado al documento, habilitado,
+     * dentro del viewport, sin scroll, y elementFromPoint lo devuelve a él tanto en
+     * el centro como en la esquina. Solo la invocación directa por DOM funciona.
      *
-     * El recurso a JavaScript avisa cada vez que se usa. Cuesta fidelidad —no
-     * ejercita el mismo camino que el de una persona— así que es el último recurso
-     * y no el método por defecto. Si esos avisos se vuelven frecuentes, el problema
-     * de entrega volvió y hay que atacarlo, no acostumbrarse.
+     * Se reprodujo en Windows y en Linux, con navegador visible y headless, en
+     * máquina local y en CI. No es del entorno ni del test.
+     *
+     * Cuesta fidelidad: un click por JavaScript no recorre el mismo camino que el
+     * de una persona. Por eso es el último recurso y no el método por defecto, se
+     * cuenta en FallbackTracker, aparece en el reporte y hay un umbral que rompe el
+     * build. Si el número crece, hay que ir a ver qué elemento nuevo lo necesita,
+     * no subir el umbral.
      */
     public static void clickHasta(By locator, ExpectedCondition<?> efecto) {
         TimeoutException ultimoError = null;
@@ -109,10 +117,19 @@ public final class WebUI {
                 if (intento > 1) LogUtils.warn("Click en " + locator + " necesitó " + intento + " intentos");
                 return;
             }
-            ultimoError = new TimeoutException("El click en " + locator + " no produjo efecto");
+            // La URL en el mensaje ahorra la mitad del diagnostico: dice si la
+            // pagina no se movio, si navego a otro lado, o si recargo con query.
+            ultimoError = new TimeoutException(
+                    "El click en " + locator + " no produjo el efecto esperado. "
+                    + "El navegador quedo en: " + driver().getCurrentUrl());
+        }
+
+        if (!ConfigManager.get().fallbackJsHabilitado()) {
+            throw ultimoError;
         }
 
         LogUtils.warn("Click nativo sin efecto en " + locator + ", recurriendo a JavaScript");
+        FallbackTracker.registrar("click en " + locator);
         js().executeScript("arguments[0].click();", driver().findElement(locator));
         if (WaitUtils.seCumple(efecto, FrameworkConstants.TIMEOUT_EFECTO_ACCION)) return;
         throw ultimoError;
@@ -184,7 +201,14 @@ public final class WebUI {
             return;
         }
 
+        if (!ConfigManager.get().fallbackJsHabilitado()) {
+            throw new FrameworkException(
+                    "El sendKeys en " + locator + " no dejo el valor esperado y el recurso a "
+                    + "JavaScript esta deshabilitado en este perfil.");
+        }
+
         LogUtils.warn("sendKeys sin efecto en " + locator + ", asignando por JavaScript");
+        FallbackTracker.registrar("sendKeys en " + locator);
         js().executeScript(
                 "const setter = Object.getOwnPropertyDescriptor("
               + "    window.HTMLInputElement.prototype, 'value').set;"
@@ -312,6 +336,72 @@ public final class WebUI {
 
     public static void scrollAlInicio() {
         js().executeScript("window.scrollTo(0, 0);");
+    }
+
+
+    // ------------------------------------------------------------------
+    // Manejo de fallos por accion
+    // ------------------------------------------------------------------
+
+    /**
+     * Ejecuta una accion aplicando la politica de fallos indicada.
+     *
+     * STOP_ON_FAILURE relanza y corta el caso, que es el comportamiento por defecto
+     * de todos los metodos de arriba. CONTINUE_ON_FAILURE registra el fallo en
+     * SoftFailures y sigue: el caso termina en rojo igual, pero recien al final y
+     * mostrando todos los fallos juntos. OPTIONAL ni siquiera lo cuenta como fallo,
+     * para lo que legitimamente puede no estar, como un banner de cookies.
+     *
+     * Devuelve si la accion salio bien, para poder ramificar sin capturar nada.
+     */
+    public static boolean intentar(String descripcion, Runnable accion, FailureHandling manejo) {
+        try {
+            accion.run();
+            return true;
+        } catch (RuntimeException e) {
+            return switch (manejo) {
+                case STOP_ON_FAILURE -> throw e;
+                case CONTINUE_ON_FAILURE -> {
+                    String detalle = descripcion + " -> " + e.getMessage();
+                    SoftFailures.registrar(detalle);
+                    LogUtils.warn("Fallo tolerado (se reporta al final): " + detalle);
+                    yield false;
+                }
+                case OPTIONAL -> {
+                    LogUtils.debug("Accion opcional que no se pudo hacer: " + descripcion);
+                    yield false;
+                }
+            };
+        }
+    }
+
+    public static boolean click(By locator, FailureHandling manejo) {
+        return intentar("click en " + locator, () -> click(locator), manejo);
+    }
+
+    public static boolean escribir(By locator, String texto, FailureHandling manejo) {
+        return intentar("escribir en " + locator, () -> escribir(locator, texto), manejo);
+    }
+
+    public static boolean limpiarYEscribir(By locator, String texto, FailureHandling manejo) {
+        return intentar("escribir en " + locator, () -> limpiarYEscribir(locator, texto), manejo);
+    }
+
+    public static boolean seleccionarPorTexto(By locator, String texto, FailureHandling manejo) {
+        return intentar("seleccionar '" + texto + "' en " + locator,
+                () -> seleccionarPorTexto(locator, texto), manejo);
+    }
+
+    public static boolean marcar(By locator, FailureHandling manejo) {
+        return intentar("marcar " + locator, () -> marcar(locator), manejo);
+    }
+
+    public static boolean desmarcar(By locator, FailureHandling manejo) {
+        return intentar("desmarcar " + locator, () -> desmarcar(locator), manejo);
+    }
+
+    public static boolean hover(By locator, FailureHandling manejo) {
+        return intentar("hover sobre " + locator, () -> hover(locator), manejo);
     }
 
     // ------------------------------------------------------------------
