@@ -93,15 +93,73 @@ vez de forzar una sola abstracción para los dos mundos.
 
 ## Deuda conocida
 
-Cosas que están simplificadas a propósito y conviene tener a la vista:
+- **`Platform` no se usa todavía.** Solo tiene sentido con Grid o Appium, que
+  están más arriba en esta lista. Se deja declarado porque `TargetFactory` ya
+  contempla `Target.GRID` y ahí es donde va a hacer falta.
 
-- **`FailureHandling` está declarado pero no se usa.** El enum existe con la
-  intención de que `WebUI` pueda continuar ante un fallo en vez de cortar, pero
-  hoy todos los métodos cortan. Implementarlo requiere decidir dónde se acumulan
-  los errores blandos.
-- **El recurso a JavaScript en `WebUI` avisa pero no falla.** Es lo correcto hoy,
-  pero si esos avisos se vuelven frecuentes hay que atacar el problema de entrega
-  de eventos, no acostumbrarse a que el fallback lo tape.
-- **`Platform` no se usa todavía.** Solo tiene sentido con Grid o Appium.
-- **El proyecto de ejemplo es uno solo.** Un segundo proyecto con otra estructura
-  probaría de verdad que el framework es genérico y no está moldeado a SauceDemo.
+- **`clickHasta` reintenta hasta 3 veces.** Ahora verifica que el disparador siga
+  presente antes de reintentar, así que no repite una acción que ya ocurrió. Pero
+  si un botón sigue visible después de un click que sí tuvo efecto parcial, el
+  reintento es posible. Para acciones no idempotentes conviene pasar un efecto
+  que sea inequívoco, como un cambio de URL.
+
+---
+
+## Resuelto
+
+Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### `FailureHandling` operativo
+
+Era un enum declarado que nadie usaba. Ahora `WebUI` tiene sobrecargas que
+aplican la política, `SoftFailures` acumula los fallos tolerados por hilo y
+`SoftFailureListener` da vuelta el resultado del caso a FAILURE si terminó con
+alguno.
+
+Esa última pieza es la que importa: sin ella, `CONTINUE_ON_FAILURE` habría sido
+una forma elegante de esconder errores. Va en `afterInvocation` de
+`IInvokedMethodListener` y no en un `@AfterMethod` porque corre antes de
+`onTestSuccess` —así el reporte ya lo ve fallado— y porque un `@AfterMethod` que
+lanza marca un fallo de configuración, no del test.
+
+### El recurso a JavaScript, medido
+
+Estaba como "avisa pero no falla". Se investigó a fondo antes de decidir qué
+hacer, y el resultado cambió la conclusión.
+
+En ciertos elementos, **ningún input mediado por WebDriver llega a la página**:
+ni `element.click()`, ni `Actions.moveToElement().click()`, ni enfocar y mandar
+ENTER. Instrumentando el documento con un listener propio, no llega ningún
+evento. Y mientras tanto el elemento mide impecable: único que matchea el
+selector, conectado al documento, habilitado, dentro del viewport, sin scroll, y
+`elementFromPoint` lo devuelve a él tanto en el centro como en la esquina. Solo
+la invocación directa por DOM funciona.
+
+Se reprodujo en Windows y en Linux, con navegador visible y headless, en máquina
+local y en CI, con frecuencia variable (~70% headless, ~33% headed).
+
+O sea que el recurso a JavaScript no tapa un bug propio: rodea una limitación
+real. Por eso queda habilitado en todos los perfiles, pero **contado**
+(`FallbackTracker`), **visible en el encabezado del reporte** y **con un umbral
+que rompe el build** vía `FallbackGuardTest`. Si el número crece, la respuesta es
+ver qué elemento nuevo lo necesita, no subir el umbral.
+
+El guardián es un caso de test y no una excepción desde el listener: una
+excepción en `ISuiteListener` rompe el build pero deja a surefire sin poder
+informar cuántos tests corrieron, y el resultado es un rojo que no dice nada.
+
+### Segundo proyecto
+
+`FrameUtils`, `TableUtils` y `WindowUtils` compilaban pero **nunca se habían
+ejecutado**. El proyecto sobre the-internet los ejercita, y de paso valida que el
+framework sirva para una app sin login, sin flujo y con otra estructura.
+
+Encontró un bug real en `clickHasta` a los cinco minutos de existir: la ventana
+de espera del efecto era más corta que una carga diferida legítima de la página,
+así que el método reintentaba un click que ya había funcionado. Sobre un botón de
+compra eso genera una orden duplicada. Ahora `clickHasta` verifica que el
+disparador siga presente antes de reintentar, y acepta un tiempo de efecto
+explícito para los casos legítimamente lentos.
+
+Es exactamente el argumento a favor de tener un segundo proyecto: no encontró un
+problema del proyecto nuevo, encontró uno del framework.

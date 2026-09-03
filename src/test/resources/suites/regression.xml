@@ -23,6 +23,7 @@
         </groups>
         <packages>
             <package name="com.silveira.projects.saucedemo.tests"/>
+            <package name="com.silveira.projects.theinternet.tests"/>
         </packages>
     </test>
 

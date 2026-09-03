@@ -109,13 +109,37 @@ public final class WebUI {
      * no subir el umbral.
      */
     public static void clickHasta(By locator, ExpectedCondition<?> efecto) {
+        clickHasta(locator, efecto, FrameworkConstants.TIMEOUT_EFECTO_ACCION);
+    }
+
+    /**
+     * Igual que clickHasta, con el tiempo de espera del efecto explícito.
+     *
+     * Hace falta cuando el efecto es legítimamente lento: una carga diferida de
+     * varios segundos supera la ventana corta por defecto y el reintento se
+     * dispararía sobre una acción que ya ocurrió.
+     */
+    public static void clickHasta(By locator, ExpectedCondition<?> efecto, int segundosDeEfecto) {
         TimeoutException ultimoError = null;
 
         for (int intento = 1; intento <= FrameworkConstants.INTENTOS_ACCION; intento++) {
             WaitUtils.clickeable(locator).click();
-            if (WaitUtils.seCumple(efecto, FrameworkConstants.TIMEOUT_EFECTO_ACCION)) {
+            if (WaitUtils.seCumple(efecto, segundosDeEfecto)) {
                 if (intento > 1) LogUtils.warn("Click en " + locator + " necesitó " + intento + " intentos");
                 return;
+            }
+
+            // Si el disparador desapareció, el click SÍ tuvo efecto y lo que falta
+            // es que el efecto termine de ocurrir. Reintentar acá seria repetir una
+            // accion ya hecha, y sobre un boton de compra o de envio eso genera un
+            // duplicado. Se espera el efecto con el timeout completo y se corta.
+            if (contar(locator) == 0 || !estaVisible(locator, 1)) {
+                LogUtils.info("El disparador " + locator + " ya no está: el click tuvo efecto, "
+                        + "esperando a que el efecto termine");
+                if (WaitUtils.seCumple(efecto, ConfigManager.get().explicitTimeout())) return;
+                throw new TimeoutException(
+                        "El click en " + locator + " tuvo efecto pero el resultado esperado "
+                        + "nunca llegó. El navegador quedó en: " + driver().getCurrentUrl());
             }
             // La URL en el mensaje ahorra la mitad del diagnostico: dice si la
             // pagina no se movio, si navego a otro lado, o si recargo con query.
@@ -131,7 +155,7 @@ public final class WebUI {
         LogUtils.warn("Click nativo sin efecto en " + locator + ", recurriendo a JavaScript");
         FallbackTracker.registrar("click en " + locator);
         js().executeScript("arguments[0].click();", driver().findElement(locator));
-        if (WaitUtils.seCumple(efecto, FrameworkConstants.TIMEOUT_EFECTO_ACCION)) return;
+        if (WaitUtils.seCumple(efecto, segundosDeEfecto)) return;
         throw ultimoError;
     }
 
