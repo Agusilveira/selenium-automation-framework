@@ -143,6 +143,44 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  app-propia:
+    name: Cruce entre capas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Levantar la aplicacion bajo prueba
+        run: docker compose -f docker-compose.app.yml up -d
+
+      # El compose espera a que los contenedores esten sanos, pero preparar-app.sh
+      # necesita ademas que la aplicacion responda por HTTP: son dos cosas
+      # distintas y saltearse la segunda da errores que parecen del framework.
+      - name: Preparar usuario, token y datos
+        run: ./scripts/preparar-app.sh
+
+      - name: Correr el cruce entre capas
+        env:
+          TEST_ENV: app
+        run: mvn -B test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app
+
+      - name: Bajar la aplicacion
+        if: always()
+        run: docker compose -f docker-compose.app.yml down -v
+
+      - name: Publicar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-app
+          path: reports/
+          retention-days: 30
+          if-no-files-found: ignore
+
   cucumber:
     name: Cucumber
     runs-on: ubuntu-latest

@@ -61,6 +61,37 @@ public final class ApiClient {
         return base();
     }
 
+    /**
+     * Spec con un token ya obtenido.
+     *
+     * AuthManager sirve para APIs que autentican con usuario y contrasena contra un
+     * endpoint de login. Muchas usan un token emitido por fuera, y forzarlas por
+     * ese camino obligaria a inventar un login que no existe.
+     */
+    public static RequestSpecification conToken(String token) {
+        return base().header("Authorization", "token " + token);
+    }
+
+    public static ApiResponse getConToken(String ruta, String token) {
+        return ApiResponse.de(conToken(token).get(ruta), ruta);
+    }
+
+    public static ApiResponse getConToken(String ruta, String token, Map<String, ?> parametros) {
+        return ApiResponse.de(conToken(token).queryParams(parametros).get(ruta), ruta);
+    }
+
+    public static ApiResponse postConToken(String ruta, Object cuerpo, String token) {
+        return ApiResponse.de(conToken(token).body(cuerpo).post(ruta), ruta);
+    }
+
+    public static ApiResponse patchConToken(String ruta, Object cuerpo, String token) {
+        return ApiResponse.de(conToken(token).body(cuerpo).patch(ruta), ruta);
+    }
+
+    public static ApiResponse deleteConToken(String ruta, String token) {
+        return ApiResponse.de(conToken(token).delete(ruta), ruta);
+    }
+
     // ------------------------------------------------------------------
     // Verbos sin autenticación
     // ------------------------------------------------------------------

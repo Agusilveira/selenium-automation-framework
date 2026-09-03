@@ -443,6 +443,28 @@ public final class WebUI {
     }
 
     /**
+     * Para cuando lo que importa es haber salido de una página, no a cuál se llegó.
+     *
+     * Un login que redirige al panel de inicio es el caso típico: la URL destino
+     * puede cambiar entre versiones de la aplicación, pero dejar la de login es lo
+     * que define que la acción funcionó.
+     */
+    /**
+     * Para cuando "contiene" no alcanza porque el origen ya lo cumple.
+     *
+     * Crear algo desde /issues/new y esperar que la URL contenga "/issues/" es el
+     * ejemplo: la condicion ya se cumple antes de hacer nada, la espera pasa al
+     * instante y el test sigue creyendo que la accion ocurrio.
+     */
+    public static ExpectedCondition<Boolean> hastaQueLaUrlCoincidaCon(String expresion) {
+        return ExpectedConditions.urlMatches(expresion);
+    }
+
+    public static ExpectedCondition<Boolean> hastaQueLaUrlNoContenga(String fragmento) {
+        return ExpectedConditions.not(ExpectedConditions.urlContains(fragmento));
+    }
+
+    /**
      * Pausa fija. Existe porque a veces no queda otra —una animación sin señal
      * observable, por ejemplo— pero cada uso es deuda: si aparece en un flujo
      * normal, falta una espera explícita.

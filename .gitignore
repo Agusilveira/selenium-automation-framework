@@ -13,3 +13,5 @@ target/
 # Notas de trabajo, no parte del framework
 docs/superpowers/
 grid-videos/
+.app-token
+src/test/resources/config/.app-token

@@ -1,0 +1,65 @@
+# Aplicacion bajo prueba con sus tres caras accesibles: interfaz web, API REST y
+# base de datos. Es lo que permite demostrar el cruce entre capas.
+#
+#   docker compose -f docker-compose.app.yml up -d
+#   ./scripts/preparar-app.sh
+#   mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app
+#
+# El codigo de Gitea no vive en este repositorio: solo esta receta para levantarlo.
+#
+# Las versiones estan fijadas. Con un 'latest', la misma suite corre contra
+# versiones distintas segun el dia y una falla no se puede atribuir.
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: app-db
+    environment:
+      - POSTGRES_DB=gitea
+      - POSTGRES_USER=gitea
+      - POSTGRES_PASSWORD=gitea
+    ports:
+      # 5433 y no 5432 para no chocar con un Postgres que ya este corriendo en la
+      # maquina. Los tests de base se conectan aca desde el host.
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitea -d gitea"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  gitea:
+    image: gitea/gitea:1.27.3
+    container_name: app-gitea
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=db:5432
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=gitea
+      - GITEA__database__PASSWD=gitea
+      # Saltea el asistente de instalacion: sin esto la primera visita a la UI
+      # abre un formulario de configuracion y ningun test puede empezar.
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__server__ROOT_URL=http://localhost:3000/
+      - GITEA__server__DOMAIN=localhost
+      - GITEA__service__DISABLE_REGISTRATION=false
+      - GITEA__service__REQUIRE_SIGNIN_VIEW=false
+      # Sin captcha ni confirmacion por mail: son barreras que no aportan nada a
+      # lo que se quiere demostrar y solo agregan pasos fragiles.
+      - GITEA__service__ENABLE_CAPTCHA=false
+      - GITEA__service__REGISTER_EMAIL_CONFIRM=false
+      - GITEA__log__LEVEL=Warn
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
