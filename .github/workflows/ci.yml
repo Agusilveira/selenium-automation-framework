@@ -70,6 +70,34 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  base-de-datos:
+    name: Base de datos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Testcontainers levanta un Postgres real; los runners de GitHub traen
+      # Docker. Con TEST_ENV=ci la base es obligatoria: si no se pudiera
+      # levantar, la suite falla en vez de quedar en verde sin haber probado nada.
+      - name: Correr la suite de base de datos
+        env:
+          TEST_ENV: ci
+        run: mvn -B test -DsuiteXmlFile=src/test/resources/suites/db.xml
+
+      - name: Publicar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-db
+          path: reports/
+          retention-days: 30
+          if-no-files-found: ignore
+
   cucumber:
     name: Cucumber
     runs-on: ubuntu-latest

@@ -25,6 +25,9 @@
     <datafaker.version>2.4.0</datafaker.version>
     <assertj.version>3.26.3</assertj.version>
     <restassured.version>5.5.0</restassured.version>
+    <testcontainers.version>1.21.3</testcontainers.version>
+    <postgresql.version>42.7.7</postgresql.version>
+    <hikari.version>6.3.0</hikari.version>
 
     <suiteXmlFile>src/test/resources/suites/regression.xml</suiteXmlFile>
   </properties>
@@ -119,6 +122,25 @@
       <artifactId>json-schema-validator</artifactId>
       <version>${restassured.version}</version>
     </dependency>
+
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+      <version>${hikari.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>${postgresql.version}</version>
+    </dependency>
+    <!-- Solo para la suite de base de datos: levanta un Postgres real y
+         descartable. Requiere Docker, por eso esa suite corre aparte. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>${testcontainers.version}</version>
+    </dependency>
+
   </dependencies>
 
   <build>
