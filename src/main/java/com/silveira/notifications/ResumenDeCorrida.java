@@ -1,14 +1,21 @@
 package com.silveira.notifications;
 
 import com.silveira.config.ConfigManager;
+import com.silveira.exceptions.FrameworkException;
+import com.silveira.helpers.FileHelper;
 import org.testng.ISuite;
 import org.testng.ISuiteResult;
 import org.testng.ITestContext;
 import org.testng.ITestResult;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Que paso en la corrida, sin saber nada de como se va a avisar.
@@ -46,10 +53,15 @@ public record ResumenDeCorrida(String suite,
         return fallados > 0;
     }
 
+    /** Plantilla del asunto si nadie define la suya. */
+    public static final String ASUNTO_POR_DEFECTO =
+            "[{{estado}}] {{suite}} en {{entorno}} — {{pasados}}/{{total}} pasaron";
+
+    private static final String PLANTILLA_EMPAQUETADA = "/templates/mail-resumen.html";
+
     public String asunto() {
-        String estado = hayFallos() ? "FALLÓ" : "OK";
-        return "[" + estado + "] " + suite + " en " + entorno
-                + " — " + pasados + "/" + total() + " pasaron";
+        return Plantilla.renderTexto(
+                ConfigManager.get().get("mail.asunto", ASUNTO_POR_DEFECTO), valores());
     }
 
     // ------------------------------------------------------------------
@@ -111,33 +123,67 @@ public record ResumenDeCorrida(String suite,
      * toma leyendo la notificacion.
      */
     public String comoHtml() {
-        String color = hayFallos() ? "#c0392b" : "#27ae60";
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"font-family:system-ui,sans-serif;font-size:14px\">")
-          .append("<h2 style=\"color:").append(color).append(";margin-bottom:4px\">")
-          .append(escapar(suite)).append(hayFallos() ? ": falló" : ": todo verde").append("</h2>")
-          .append("<p style=\"color:#555;margin-top:0\">")
-          .append(escapar(entorno)).append(" · ").append(escapar(navegador))
-          .append(" · ").append(duracionLegible()).append("</p>")
-          .append("<p><b>").append(pasados).append("</b> pasaron · <b>")
-          .append(fallados).append("</b> fallaron · <b>")
-          .append(omitidos).append("</b> omitidos</p>");
+        return comoHtml(plantilla());
+    }
 
-        if (!fallos.isEmpty()) {
-            sb.append("<h3>Casos fallados</h3><ul>");
-            for (CasoFallado fallo : fallos) {
-                sb.append("<li><b>").append(escapar(fallo.nombreCompleto())).append("</b><br>")
-                  .append("<span style=\"color:#555\">").append(escapar(fallo.mensaje()))
-                  .append("</span></li>");
+    /** Renderiza contra una plantilla dada. Es la puerta que usan los tests. */
+    public String comoHtml(String plantilla) {
+        return Plantilla.renderHtml(plantilla, valores());
+    }
+
+    /**
+     * Los parámetros que ve la plantilla.
+     *
+     * Es el contrato con quien escriba la suya: agregar una clave acá es agregar
+     * un parámetro disponible, y no hay ningún otro lugar que tocar.
+     */
+    public Map<String, Object> valores() {
+        List<Map<String, Object>> casos = fallos.stream()
+                .map(f -> Map.<String, Object>of(
+                        "clase", f.clase(),
+                        "metodo", f.metodo(),
+                        "nombreCompleto", f.nombreCompleto(),
+                        "mensaje", f.mensaje()))
+                .toList();
+
+        Map<String, Object> valores = new LinkedHashMap<>();
+        valores.put("suite", suite);
+        valores.put("entorno", entorno);
+        valores.put("navegador", navegador);
+        valores.put("duracion", duracionLegible());
+        valores.put("estado", hayFallos() ? "FALLÓ" : "OK");
+        valores.put("color", hayFallos() ? "#c0392b" : "#27ae60");
+        valores.put("pasados", pasados);
+        valores.put("fallados", fallados);
+        valores.put("omitidos", omitidos);
+        valores.put("total", total());
+        valores.put("hayFallos", hayFallos());
+        valores.put("fallos", casos);
+        valores.put("urlReporte", urlDelReporte);
+        return valores;
+    }
+
+    /**
+     * La plantilla configurada, o la que viene con el framework.
+     *
+     * Un archivo propio gana sobre la empaquetada, y si esa ruta no existe se
+     * falla diciéndolo: caer silenciosamente en la de por defecto haría que un
+     * error de tipeo en la ruta se descubra recién al mirar un mail que no se
+     * parece al que se esperaba.
+     */
+    private static String plantilla() {
+        String ruta = ConfigManager.get().get("mail.plantilla", "");
+        if (!ruta.isBlank()) {
+            return FileHelper.leerTexto(ruta);
+        }
+        try (InputStream in = ResumenDeCorrida.class.getResourceAsStream(PLANTILLA_EMPAQUETADA)) {
+            if (in == null) {
+                throw new FrameworkException("Falta la plantilla empaquetada " + PLANTILLA_EMPAQUETADA);
             }
-            sb.append("</ul>");
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new FrameworkException("No se pudo leer " + PLANTILLA_EMPAQUETADA, e);
         }
-
-        if (!urlDelReporte.isBlank()) {
-            sb.append("<p><a href=\"").append(escapar(urlDelReporte))
-              .append("\">Ver el reporte completo</a></p>");
-        }
-        return sb.append("</div>").toString();
     }
 
     public String duracionLegible() {
@@ -146,7 +192,4 @@ public record ResumenDeCorrida(String suite,
         return minutos > 0 ? minutos + " min " + segundos + " s" : segundos + " s";
     }
 
-    private static String escapar(String texto) {
-        return texto == null ? "" : texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-    }
 }

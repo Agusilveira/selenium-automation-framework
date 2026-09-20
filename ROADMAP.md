@@ -25,9 +25,10 @@ que ningún assert funcional captura. Necesita una estrategia de tolerancia y de
 actualización de la base, que es la parte difícil, no la comparación.
 
 `LineaBaseA11y` ya resolvió la mitad conceptual: archivo versionado, se falla solo
-por lo que empeoró, se regenera con una propiedad. Lo que no aporta es la
-tolerancia, que en imágenes no es un entero sino un umbral de píxeles distintos, y
-ahí es donde esto se pone difícil de verdad.
+por lo que empeoró, se regenera con una propiedad. Y `video/` ya trae la captura y
+el manejo de imágenes. Lo que no aporta ninguno de los dos es la tolerancia, que
+en imágenes no es un entero sino un umbral de píxeles distintos, y ahí es donde
+esto se pone difícil de verdad.
 
 ## Appium
 
@@ -62,6 +63,64 @@ vez de forzar una sola abstracción para los dos mundos.
 ## Resuelto
 
 Lo que estaba en esta sección y se cerró, con lo que se aprendió en el camino.
+
+### Video de cada caso, sin Grid
+
+`video/` graba con el screencast de CDP y arma el MP4 con jcodec. Por defecto se
+conserva solo el video de los casos que fallan; `VIDEO_CUANDO=SIEMPRE` guarda
+todos.
+
+**La decisión que define la función fue no usar la API de DevTools de Selenium.**
+Es la opción cómoda y la primera que escribí. No graba: viene en paquetes atados a
+la versión del navegador —`selenium-devtools-v137`— y el Chrome de esta máquina es
+la 153. Selenium devuelve una implementación no-op, el framework avisa y no hay
+video.
+
+Actualizar Selenium lo arreglaba hasta la próxima actualización automática de
+Chrome, cuatro semanas después. Eso no es un arreglo: es una función que se apaga
+sola y en silencio, y el día que alguien necesita el video no está y nadie sabe
+desde cuándo. Hablar CDP en crudo sobre una websocket de la biblioteca estándar no
+tiene ese problema: los nombres de los comandos llevan años estables y no hay nada
+que actualizar.
+
+Las dos alternativas clásicas se descartaron antes, por motivos distintos: sacar
+capturas desde otro hilo mete comandos concurrentes en una sesión de WebDriver, y
+grabar el escritorio necesita una pantalla real, así que no sirve headless.
+
+Firefox queda afuera: abandonó CDP y su reemplazo todavía no tiene screencast. Lo
+cubre el Grid, que filma el display del nodo desde afuera.
+
+La reconstrucción del tiempo es la parte que no se ve y sin la cual el video
+engaña: el navegador manda cuadros cuando la página cambia, así que veinte
+segundos de espera no producen ninguno. Sin repetir cuadros para llenar los
+huecos, el video mostraría un test sin esperas, que es justo lo contrario de lo
+que uno busca al investigar un fallo de timing.
+
+### El mail como plantilla
+
+El cuerpo y el asunto salen de una plantilla con parámetros, reemplazable por
+`MAIL_PLANTILLA` y `MAIL_ASUNTO` sin tocar código. El motor son cuarenta líneas
+—variables, secciones repetidas y condicionales— y no una librería: Mustache a
+cambio de nada que esto no haga.
+
+Lo que sí hace con cuidado es escapar, porque el texto que entra son mensajes de
+error de tests que fallaron, que es contenido que nadie controla.
+
+Esto fue barato porque `ResumenDeCorrida` ya era un valor separado del envío. La
+plantilla solo agregó el `Map` de parámetros; no hubo que tocar nada del camino
+hacia SMTP.
+
+### SauceDemo arregló su bug de accesibilidad
+
+No es trabajo propio, pero es la primera vez que la línea base sirvió para lo que
+existe. Al correr la suite el 2026-09-20, el `select-name` crítico del listado
+—que estaba en la línea base desde el 03-09— había desaparecido: el desplegable de
+ordenamiento ya tiene nombre accesible.
+
+El framework lo dijo solo: *"la regla 'select-name' ya no aparece en
+'saucedemo-inventario'. Se puede sacar de la linea base."* Sin ese aviso, la línea
+base habría quedado tolerando una violación inexistente, y una regresión futura
+hasta ese mismo número habría pasado desapercibida.
 
 ### Accesibilidad con línea base
 

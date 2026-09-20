@@ -8,6 +8,7 @@ target/
 /allure-report/
 /reports/
 /evidence/
+/videos/
 .env
 
 # Notas de trabajo, no parte del framework

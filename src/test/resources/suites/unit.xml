@@ -9,6 +9,7 @@
             <package name="com.silveira.helpers"/>
             <package name="com.silveira.notifications"/>
             <package name="com.silveira.utils"/>
+            <package name="com.silveira.video"/>
         </packages>
     </test>
 </suite>

@@ -7,6 +7,7 @@ import com.silveira.reports.AllureManager;
 import com.silveira.reports.ExtentReportManager;
 import com.silveira.reports.ExtentTestManager;
 import com.silveira.utils.LogUtils;
+import com.silveira.video.VideoRecorder;
 import org.testng.ITestContext;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
@@ -31,11 +32,16 @@ public class TestListener implements ITestListener {
     public void onTestStart(ITestResult resultado) {
         ExtentTestManager.crear(nombre(resultado), descripcion(resultado));
         anotarMetadatos(resultado);
+        // Acá y no en un @BeforeMethod de BaseTest: onTestStart corre después de la
+        // configuración, así que el navegador ya existe, y vale para todos los
+        // proyectos sin que cada base tenga que acordarse de llamarlo.
+        VideoRecorder.iniciar(nombreCompleto(resultado));
         LogUtils.info("▶ " + nombre(resultado));
     }
 
     @Override
     public void onTestSuccess(ITestResult resultado) {
+        cerrarVideo();
         ExtentTestManager.ok("El caso pasó");
         ExtentTestManager.remover();
         LogUtils.info("✔ " + nombre(resultado));
@@ -45,6 +51,11 @@ public class TestListener implements ITestListener {
     public void onTestFailure(ITestResult resultado) {
         Throwable causa = resultado.getThrowable();
         LogUtils.error("✘ " + nombre(resultado) + ": " + (causa != null ? causa.getMessage() : ""));
+
+        // Antes de la evidencia: detener el screencast es un comando más sobre la
+        // misma sesión, y el navegador sigue abierto hasta el @AfterMethod.
+        VideoRecorder.marcarParaConservar();
+        cerrarVideo();
 
         // La evidencia se captura antes de que BaseTest cierre el navegador, y
         // nunca puede tapar el error real: por eso va en un bloque que no lanza.
@@ -60,6 +71,7 @@ public class TestListener implements ITestListener {
 
     @Override
     public void onTestSkipped(ITestResult resultado) {
+        cerrarVideo();
         ExtentTestManager.omitido("El caso se omitió");
         ExtentTestManager.remover();
         LogUtils.warn("↷ " + nombre(resultado) + " omitido");
@@ -71,8 +83,27 @@ public class TestListener implements ITestListener {
         LogUtils.info("Suite terminada: " + contexto.getName());
     }
 
+    /**
+     * Cierra la grabación si había una.
+     *
+     * La ruta va al reporte como texto y no como enlace a propósito: el reporte se
+     * lee desde tres lugares distintos —el repo, el artefacto de CI y GitHub
+     * Pages— y ninguna ruta relativa sirve para los tres. Un enlace roto en dos de
+     * ellos es peor que una ruta que siempre se puede copiar.
+     */
+    private void cerrarVideo() {
+        VideoRecorder.detener().ifPresent(ruta ->
+                ExtentTestManager.info("Video del caso: " + ruta));
+    }
+
     private String nombre(ITestResult resultado) {
         return resultado.getMethod().getMethodName();
+    }
+
+    /** Clase y método, para que dos casos con el mismo nombre no compartan archivo. */
+    private String nombreCompleto(ITestResult resultado) {
+        return resultado.getTestClass().getRealClass().getSimpleName()
+                + "." + resultado.getMethod().getMethodName();
     }
 
     private String descripcion(ITestResult resultado) {

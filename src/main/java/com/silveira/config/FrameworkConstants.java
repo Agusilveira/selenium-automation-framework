@@ -21,6 +21,7 @@ public final class FrameworkConstants {
 
     public static final String RUTA_REPORTES  = "reports/";
     public static final String RUTA_EVIDENCIA = "evidence/";
+    public static final String RUTA_VIDEOS    = "videos/";
     public static final String REPORTE_EXTENT = RUTA_REPORTES + "ExtentReport.html";
 
     /** Usados solo si el perfil de configuración no define los suyos. */

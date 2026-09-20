@@ -1,0 +1,49 @@
+<!--
+  Plantilla por defecto del mail de resumen.
+
+  Para usar otra, apuntar a un archivo propio:
+      MAIL_PLANTILLA=/ruta/a/mi-plantilla.html
+
+  Parametros disponibles, entre llaves dobles:
+      suite · entorno · navegador · duracion · estado · color
+      pasados · fallados · omitidos · total · urlReporte
+
+  Secciones, abriendo con #nombre y cerrando con /nombre entre llaves dobles:
+      hayFallos    el bloque va solo si algo fallo (con ^ delante, solo si no)
+      fallos       una vez por caso fallado, con clase, metodo y mensaje
+      urlReporte   solo si hay REPORTE_URL configurada
+
+  Ojo: las llaves dobles no se escriben en este comentario a proposito. El motor
+  no distingue comentario de contenido, asi que una seccion documentada aca se
+  renderizaria igual que una de verdad.
+
+  Estilos en linea a proposito: los clientes de mail descartan las hojas externas
+  y buena parte de lo que va en un <style>.
+-->
+<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#222">
+
+  <h2 style="color:{{color}};margin-bottom:4px">
+    {{suite}}{{#hayFallos}}: falló{{/hayFallos}}{{^hayFallos}}: todo verde{{/hayFallos}}
+  </h2>
+
+  <p style="color:#555;margin-top:0">{{entorno}} &middot; {{navegador}} &middot; {{duracion}}</p>
+
+  <p><b>{{pasados}}</b> pasaron &middot; <b>{{fallados}}</b> fallaron &middot; <b>{{omitidos}}</b> omitidos</p>
+
+  {{#hayFallos}}
+  <h3 style="margin-bottom:6px">Casos fallados</h3>
+  <ul style="padding-left:18px">
+    {{#fallos}}
+    <li style="margin-bottom:8px">
+      <b>{{clase}}.{{metodo}}</b><br>
+      <span style="color:#555">{{mensaje}}</span>
+    </li>
+    {{/fallos}}
+  </ul>
+  {{/hayFallos}}
+
+  {{#urlReporte}}
+  <p><a href="{{urlReporte}}">Ver el reporte completo</a></p>
+  {{/urlReporte}}
+
+</div>

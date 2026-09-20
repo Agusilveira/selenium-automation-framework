@@ -52,6 +52,7 @@ jobs:
           path: |
             reports/
             evidence/
+            videos/
           retention-days: 30
           if-no-files-found: ignore
 
@@ -189,7 +190,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: reporte-app
-          path: reports/
+          path: |
+            reports/
+            videos/
           retention-days: 30
           if-no-files-found: ignore
 

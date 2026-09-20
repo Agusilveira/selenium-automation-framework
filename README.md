@@ -8,7 +8,7 @@ runner principal y **Cucumber** como camino opcional.
 El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
 demostración de que funciona, no el objetivo.
 
-**52 clases de framework · UI, API y base de datos, cruzadas sobre una misma app · accesibilidad con línea base · CI en ocho jobs**
+**56 clases de framework · UI, API y base de datos, cruzadas sobre una misma app · accesibilidad con línea base · video de cada fallo · CI en ocho jobs**
 
 ## Correrlo
 
@@ -29,6 +29,7 @@ mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid   # contra
 mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app     # cruce entre capas
 mvn test -Pcucumber                                              # los features
 mvn test -Da11y.actualizar=true                                  # regenera las líneas base de accesibilidad
+mvn test -DVIDEO_CUANDO=SIEMPRE                                  # graba video de todos los casos, no solo los que fallan
 mvn test -DBROWSER=firefox -DTEST_ENV=ci                         # override de config
 ```
 
@@ -42,7 +43,8 @@ src/main/java/com/silveira/          EL FRAMEWORK
 ├── exceptions/      FrameworkException y 4 derivadas
 ├── api/             ApiClient · ApiResponse · AuthManager · ContractGuard · Paginador · ApiLogFilter · RateLimitFilter
 ├── a11y/            AnalisisA11y · LineaBaseA11y · ViolacionA11y
-├── notifications/   ResumenDeCorrida · EmailNotifier
+├── notifications/   ResumenDeCorrida · EmailNotifier · Plantilla
+├── video/           VideoRecorder · ConexionCdp · CodificadorMp4
 ├── db/              DatabaseManager · DatabaseHelper · SqlLoader
 ├── keywords/        WebUI · WaitUtils · AlertUtils · FrameUtils · WindowUtils · TableUtils
 ├── helpers/         Properties · Locator · Json · Excel · File · Capture
@@ -65,6 +67,7 @@ src/test/resources/
 ├── schemas/         JSON Schema de las respuestas
 ├── contracts/       contratos versionados de los endpoints
 ├── a11y/            línea base de accesibilidad por pantalla
+└── ../main/resources/templates/  plantilla del mail, reemplazable
 ├── sql/             esquema, datos y consultas fuera del codigo Java
 └── data/            JSON y Excel para los DataProviders
 ```
@@ -345,6 +348,55 @@ alternativo describa la imagen, o que un lector de pantalla se entienda, no. Un
 cero de axe no es una página accesible: es una página sin los errores que una
 máquina puede ver sola.
 
+### Video de cada caso que falla, sin Grid y sin ffmpeg
+
+Cuando un caso falla, el screenshot final muestra la pantalla rota pero no cómo
+llegó ahí. El video sí, y ahora sale en cualquier corrida, no solo contra el Grid.
+
+```bash
+mvn test                              # graba y guarda solo los casos que fallan
+mvn test -DVIDEO_CUANDO=SIEMPRE       # guarda todos
+mvn test -DVIDEO_CUANDO=NUNCA         # no graba
+```
+
+Los archivos quedan en `videos/`, uno por caso, y viajan en el artefacto de CI.
+
+**Cómo graba, y por qué así.** Usa el screencast de CDP: el navegador empuja un
+cuadro cada vez que la página cambia. Las dos alternativas habituales no servían:
+
+- **Sacar capturas desde otro hilo** mete comandos concurrentes en una sesión de
+  WebDriver, que procesa uno por vez. En el mejor caso enlentece el caso; en el
+  peor lo rompe con un error ajeno a lo que se estaba probando.
+- **Grabar el escritorio** (Monte y similares) necesita una pantalla real, así que
+  no sirve headless, que es donde más falta hace: en CI.
+
+**El transporte es CDP crudo sobre una websocket del JDK, no `driver.getDevTools()`.**
+Esa API de Selenium viene en paquetes atados a la versión del navegador
+—`selenium-devtools-v137` y compañía—. Selenium 4.33 llega hasta la 137 y el
+Chrome de esta máquina es la 153: devuelve una implementación no-op y no graba
+nada. Actualizar Selenium lo arregla hasta la próxima actualización automática de
+Chrome, cuatro semanas después. Una función que se apaga sola y en silencio es
+peor que no tenerla. Los nombres de los comandos CDP, en cambio, llevan años
+estables.
+
+**El tiempo se reconstruye.** El navegador no manda cuadros a intervalos fijos:
+veinte segundos de espera no producen ninguno. Encadenarlos tal cual daría un
+video donde las esperas no existen, y las esperas son justo lo que uno mira cuando
+investiga un fallo de timing. Cada cuadro se repite tantas veces como haga falta
+para ocupar el tiempo real que estuvo en pantalla.
+
+**Chrome y Edge, no Firefox.** Firefox abandonó CDP y su reemplazo todavía no
+tiene screencast. Ahí no graba, lo dice en el log y el caso sigue igual; para
+cubrir Firefox está el Grid, que filma el display del nodo desde afuera.
+
+| | Local / CI sin Grid | Con Grid |
+|---|---|---|
+| Chrome · Edge | ✅ CDP, headless incluido | ✅ contenedor de video |
+| Firefox | ✗ | ✅ contenedor de video |
+
+El MP4 se arma con jcodec, en Java puro: depender de un ffmpeg instalado es
+exactamente lo que no se puede dar por sentado en un runner.
+
 ### Notificaciones: el resumen no sabe por dónde se avisa
 
 El notificador típico arma el texto del mail mientras recorre los resultados de
@@ -379,6 +431,32 @@ El cuerpo lleva los casos fallados con su primer mensaje y un enlace al reporte,
 en vez del HTML de Extent adjunto: el adjunto pesa varios megas, muchos servidores
 lo bloquean, y obliga a bajarlo para saber si hace falta mirarlo.
 
+**El cuerpo y el asunto son plantillas.** La que viene por defecto está en
+`src/main/resources/templates/mail-resumen.html`, y se reemplaza sin tocar código:
+
+```bash
+export MAIL_PLANTILLA=/ruta/a/mi-plantilla.html
+export MAIL_ASUNTO="{{estado}} · {{suite}} · {{fallados}} fallaron"
+```
+
+```html
+<h2 style="color:{{color}}">{{suite}} en {{entorno}} — {{duracion}}</h2>
+{{#hayFallos}}
+  <ul>{{#fallos}}<li>{{clase}}.{{metodo}}: {{mensaje}}</li>{{/fallos}}</ul>
+{{/hayFallos}}
+```
+
+Parámetros: `suite`, `entorno`, `navegador`, `duracion`, `estado`, `color`,
+`pasados`, `fallados`, `omitidos`, `total`, `urlReporte`. Secciones: `{{#fallos}}`
+repite por caso fallado, `{{#hayFallos}}` incluye el bloque solo si algo falló y
+`{{^hayFallos}}` solo si no.
+
+El motor son cuarenta líneas y no una librería a propósito: Mustache o Freemarker
+son cientos de kilobytes y una sintaxis entera a cambio de nada que esto no haga.
+El día que haga falta un bucle dentro de un bucle, la respuesta correcta no es
+agrandarlo sino reemplazarlo. Lo que sí hace bien es **escapar**: el texto que
+entra son mensajes de error, que es contenido que nadie controla.
+
 ```bash
 export MAIL_SMTP_HOST=smtp.gmail.com MAIL_SMTP_PUERTO=587
 export MAIL_USUARIO=... MAIL_PASSWORD=...      # contraseña de aplicación
@@ -408,6 +486,7 @@ Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
 | Un caso que cruza capas | `projects/app/` | `CruceDeCapasTest` |
 | Accesibilidad de una pantalla | una línea en un caso que ya existe | `AccesibilidadTest` |
 | Un canal de notificación | `notifications/` + `listeners/NotificacionListener` | `EmailNotifier` |
+| Otro formato de mail | una plantilla propia, sin tocar código | `templates/mail-resumen.html` |
 
 Lo que viene está en [ROADMAP.md](ROADMAP.md).
 
