@@ -20,7 +20,9 @@
 
   <Loggers>
     <!-- Selenium avisa por cada driver cuando no encuentra una version de CDP
-         que coincida con el navegador instalado. No usamos DevTools. -->
+         que coincida con el navegador instalado. Ese aviso es sobre SU capa de
+         DevTools, que efectivamente no usamos: la grabacion de video habla CDP
+         por su cuenta (ver ConexionCdp) y loguea bajo com.silveira. -->
     <Logger name="org.openqa.selenium" level="WARN"/>
     <Logger name="com.silveira" level="INFO"/>
     <Root level="INFO">
