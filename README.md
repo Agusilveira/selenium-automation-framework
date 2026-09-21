@@ -2,15 +2,29 @@
 
 [![tests](https://github.com/Agusilveira/selenium-automation-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/Agusilveira/selenium-automation-framework/actions/workflows/ci.yml)
 
-Framework de automatización reutilizable sobre **Selenium 4**, con **TestNG** como
-runner principal y **Cucumber** como camino opcional.
+Framework de automatización sobre **Selenium 4**, con **TestNG** como runner
+principal y **Cucumber** como camino opcional. Cubre interfaz, API y base de
+datos.
 
-El producto es `src/main/java`: la librería. Los tests de `src/test/java` son la
-demostración de que funciona, no el objetivo.
+Este documento describe **qué hace cada parte y cómo se usa**.
 
-**56 clases de framework · UI, API y base de datos, cruzadas sobre una misma app · accesibilidad con línea base · video de cada fallo · CI en ocho jobs**
+---
 
-## Correrlo
+## Índice
+
+| | |
+|---|---|
+| Arranque | [Correr las suites](#correr-las-suites) · [Configuración](#configuración) · [Driver](#driver) · [Clases base](#clases-base) |
+| Interfaz | [WebUI](#webui) · [Esperas](#esperas) · [Alertas, frames, ventanas y tablas](#alertas-frames-ventanas-y-tablas) · [Locators](#locators) |
+| Datos y servicios | [API](#api) · [Base de datos](#base-de-datos) · [Datos para los tests](#datos-para-los-tests) |
+| Verificación | [Manejo de fallos](#manejo-de-fallos) · [Recurso a JavaScript](#recurso-a-javascript) · [Accesibilidad](#accesibilidad) |
+| Salida | [Reportes y evidencia](#reportes-y-evidencia) · [Video](#video) · [Notificaciones por mail](#notificaciones-por-mail) |
+| Ejecución | [Listeners](#listeners) · [Suites](#suites) · [Cucumber](#cucumber) · [Selenium Grid](#selenium-grid) · [Aplicación propia](#aplicación-propia) |
+| Referencia | [Estructura de carpetas](#estructura-de-carpetas) · [Todas las claves](#todas-las-claves-de-configuración) |
+
+---
+
+## Correr las suites
 
 ```bash
 git clone https://github.com/Agusilveira/selenium-automation-framework.git
@@ -20,262 +34,828 @@ mvn test
 
 No hay drivers que descargar: Selenium Manager los resuelve en runtime.
 
+`mvn test` sin argumentos corre `regression.xml`. Para elegir otra:
+
 ```bash
-mvn test -DsuiteXmlFile=src/test/resources/suites/smoke.xml      # camino crítico
-mvn test -DsuiteXmlFile=src/test/resources/suites/parallel.xml   # 4 hilos
-mvn test -DsuiteXmlFile=src/test/resources/suites/api.xml        # solo API, sin navegador
-mvn test -DsuiteXmlFile=src/test/resources/suites/db.xml         # base de datos (requiere Docker)
-mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid   # contra el Grid
-mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app     # cruce entre capas
-mvn test -Pcucumber                                              # los features
-mvn test -Da11y.actualizar=true                                  # regenera las líneas base de accesibilidad
-mvn test -DVIDEO_CUANDO=SIEMPRE                                  # graba video de todos los casos, no solo los que fallan
-mvn test -DBROWSER=firefox -DTEST_ENV=ci                         # override de config
+mvn test -DsuiteXmlFile=src/test/resources/suites/unit.xml        # sin navegador ni red
+mvn test -DsuiteXmlFile=src/test/resources/suites/smoke.xml       # camino crítico
+mvn test -DsuiteXmlFile=src/test/resources/suites/parallel.xml    # 4 hilos
+mvn test -DsuiteXmlFile=src/test/resources/suites/api.xml         # solo API
+mvn test -DsuiteXmlFile=src/test/resources/suites/db.xml          # base de datos (Docker)
+mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid
+mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app
+mvn test -Pcucumber                                               # los features
 ```
 
-## Estructura
+---
+
+## Configuración
+
+`ConfigManager` resuelve cada clave con esta precedencia:
 
 ```
-src/main/java/com/silveira/          EL FRAMEWORK
-├── config/          ConfigManager · FrameworkConstants
-├── driver/          DriverManager · BrowserFactory · TargetFactory
-├── enums/           Browser · Target · Platform · FailureHandling
-├── exceptions/      FrameworkException y 4 derivadas
-├── api/             ApiClient · ApiResponse · AuthManager · ContractGuard · Paginador · ApiLogFilter · RateLimitFilter
-├── a11y/            AnalisisA11y · LineaBaseA11y · ViolacionA11y
-├── notifications/   ResumenDeCorrida · EmailNotifier · Plantilla
-├── video/           VideoRecorder · ConexionCdp · CodificadorMp4
-├── db/              DatabaseManager · DatabaseHelper · SqlLoader
-├── keywords/        WebUI · WaitUtils · AlertUtils · FrameUtils · WindowUtils · TableUtils
-├── helpers/         Properties · Locator · Json · Excel · File · Capture
-├── utils/           Log · Date · FakeData · BrowserInfo
-├── reports/         ExtentReportManager · ExtentTestManager · AllureManager
-└── annotations/     FrameworkAnnotation
-
-src/test/java/com/silveira/          QUIEN LO USA
-├── common/          BaseTest · BaseApiTest · BaseDbTest · BaseAppTest
-├── listeners/       TestListener · RetryAnalyzer · AnnotationTransformer · SoftFailureListener · FallbackGuardListener · NotificacionListener
-├── dataprovider/    DataProviderManager
-├── fixtures/        datos para otros tests: ProductosFixture (API) · ClientesFixture (base)
-├── projects/        SauceDemo · the-internet · DummyJSON (API) · tienda (base) · app (las tres)
-└── cucumber/        runner, steps y hooks sobre las mismas páginas
-
-src/test/resources/
-├── config/          un .properties por ambiente
-├── suites/          smoke · regression · parallel · api · db · grid · app · cucumber · unit
-├── objects/         locators externalizados
-├── schemas/         JSON Schema de las respuestas
-├── contracts/       contratos versionados de los endpoints
-├── a11y/            línea base de accesibilidad por pantalla
-└── ../main/resources/templates/  plantilla del mail, reemplazable
-├── sql/             esquema, datos y consultas fuera del codigo Java
-└── data/            JSON y Excel para los DataProviders
+variable de entorno  >  propiedad de sistema  >  archivo del perfil  >  error
 ```
 
-## Decisiones de diseño
+La clave `page.load.timeout` se busca fuera del archivo como `PAGE_LOAD_TIMEOUT`:
+punto a guion bajo, todo en mayúsculas. Vale para todas las claves sin excepción.
 
-### `WebUI` es el corazón
+El perfil se elige con `-Denv=<perfil>` o `TEST_ENV=<perfil>`, y por defecto es
+`local`. Cada perfil es un archivo en `src/test/resources/config/`:
 
-La librería de acciones. Cada método espera lo que corresponde, ejecuta, deja
-registro en el log y —en las acciones que pueden perderse— verifica que hayan
-tenido efecto.
+| Perfil | Para qué |
+|---|---|
+| `local` | desarrollo, navegador visible |
+| `ci` | headless, con recurso a JavaScript habilitado |
+| `grid` | contra el Selenium Grid del docker-compose |
+| `app` | contra la aplicación propia (Gitea) |
+
+### Cómo se lee
 
 ```java
-inventario.agregarAlCarrito("Sauce Labs Backpack");
+ConfigManager config = ConfigManager.get();
+
+config.get("sauce.password");            // falla si no está, nombrando la clave
+config.get("reporte.url", "");           // con valor por defecto
+config.getInt("db.pool.size", 5);
+config.getBool("headless");
 ```
 
-Detrás de eso: espera a que el botón sea clickeable, clickea, confirma que el
-botón cambió a "Remove", reintenta si no pasó nada, y recurre a JavaScript
-avisando si el evento no llega. Cuatro cosas en una línea. Esa es la diferencia
-entre una capa de framework y un envoltorio.
+Accesos con nombre para las claves frecuentes:
 
-### Todo recibe `By`, nunca `WebElement`
+```java
+config.baseUrl()      config.browser()       config.target()
+config.headless()     config.gridUrl()       config.reintentos()
+config.explicitTimeout()                     config.pageLoadTimeout()
+config.fallbackJsHabilitado()                config.fallbackJsMaximo()
+ConfigManager.perfilActivo()                 // nombre del perfil en uso
+```
 
-Un `WebElement` guardado se vuelve stale apenas la página se redibuja; un `By` se
-resuelve recién al usarlo. Esa regla sola elimina una familia entera de fallos
-intermitentes.
+Una clave faltante o mal tipada lanza `ConfigKeyMissingException` o
+`FrameworkException` nombrando la clave, en vez de propagarse como `null`.
 
-### Los locators viven fuera del código
+---
 
-En `objects/*.properties`, con formato `tipo:valor`:
+## Driver
+
+**`TargetFactory`** crea el `WebDriver` donde corresponda:
+
+```java
+WebDriver driver = TargetFactory.crear();                           // según el perfil
+WebDriver driver = TargetFactory.crear(Target.GRID, Browser.CHROME, true);
+```
+
+`Target` es `LOCAL` o `GRID`. `Browser` es `CHROME`, `FIREFOX` o `EDGE`.
+
+Al crear el driver aplica `page.load.timeout` del perfil y deja el **implicit
+wait en cero**: toda la espera vive en `WaitUtils`.
+
+**`BrowserFactory`** arma las capabilities de cada navegador:
+
+```java
+MutableCapabilities opciones = BrowserFactory.opciones(Browser.CHROME, true);
+```
+
+**`DriverManager`** guarda el driver del hilo actual, para que las suites
+paralelas no se pisen:
+
+```java
+DriverManager.set(driver);
+DriverManager.get();          // lanza si no hay driver en este hilo
+DriverManager.hayDriver();
+DriverManager.quit();
+```
+
+---
+
+## Clases base
+
+Un test extiende la base que corresponda al tipo de prueba:
+
+| Clase | Navegador | Base de datos | HTTP |
+|---|---|---|---|
+| `BaseTest` | uno por método | — | — |
+| `BaseApiTest` | — | — | sí |
+| `BaseDbTest` | — | Postgres por Testcontainers, una por suite | — |
+| `BaseAppTest` | uno por método | conexión por suite | sí |
+
+```java
+public class LoginTest extends BaseTest {
+    @Test
+    public void usuarioValidoAccedeAlInventario() { ... }
+}
+```
+
+`BaseTest` abre el navegador, navega a `base.url` y lo cierra al terminar el
+método. Acepta `browser` y `target` como parámetros del XML de la suite:
+
+```xml
+<parameter name="browser" value="firefox"/>
+```
+
+`BaseDbTest` omite o falla los casos según `db.requerida`: en un perfil donde la
+base es obligatoria, no poder levantarla hace fallar la suite.
+
+---
+
+## WebUI
+
+La librería de acciones. Todos los métodos reciben `By`, nunca `WebElement`, y
+esperan lo que corresponde antes de actuar.
+
+### Navegación
+
+```java
+WebUI.abrirUrl(String url)      WebUI.refrescar()      WebUI.atras()
+WebUI.adelante()                WebUI.titulo()         WebUI.urlActual()
+```
+
+### Click
+
+```java
+WebUI.click(By locator)
+WebUI.clickPorJs(By locator)
+WebUI.dobleClick(By locator)
+WebUI.clickDerecho(By locator)
+WebUI.hover(By locator)
+WebUI.arrastrar(By origen, By destino)
+```
+
+`clickHasta` hace click y **verifica que el click haya tenido efecto**. Si el
+efecto no llega, reintenta; si el disparador ya no está, entiende que el click
+funcionó y espera. Antes de reintentar comprueba que el elemento siga presente,
+así no repite una acción que ya ocurrió:
+
+```java
+WebUI.clickHasta(By locator, ExpectedCondition<?> efecto);
+WebUI.clickHasta(By locator, ExpectedCondition<?> efecto, int segundosDeEfecto);
+```
+
+Condiciones listas para pasarle:
+
+```java
+WebUI.hastaQueAparezca(By locator)
+WebUI.hastaQueLaUrlContenga(String fragmento)
+WebUI.hastaQueLaUrlNoContenga(String fragmento)   // salir de una página
+WebUI.hastaQueLaUrlCoincidaCon(String regex)      // cuando "contiene" ya se cumple
+```
+
+```java
+WebUI.clickHasta(botonLogin, WebUI.hastaQueLaUrlNoContenga("/user/login"));
+WebUI.clickHasta(botonCrear, WebUI.hastaQueLaUrlCoincidaCon(".*/issues/[0-9]+$"));
+```
+
+### Escritura y lectura
+
+```java
+WebUI.escribir(By locator, String texto)
+WebUI.limpiarYEscribir(By locator, String texto)
+WebUI.escribirVerificando(By locator, String texto)   // confirma el valor escrito
+WebUI.presionarTecla(By locator, Keys tecla)
+WebUI.subirArchivo(By locator, String rutaAbsoluta)
+
+WebUI.obtenerTexto(By locator)
+WebUI.obtenerAtributo(By locator, String atributo)
+WebUI.obtenerValor(By locator)
+WebUI.obtenerTextos(By locator)      // List<String> de todos los que matchean
+```
+
+### Estado
+
+```java
+WebUI.estaVisible(By locator)            WebUI.estaVisible(By locator, int segundos)
+WebUI.estaHabilitado(By locator)         WebUI.estaSeleccionado(By locator)
+WebUI.contar(By locator)                 // 0 si no hay ninguno, no lanza
+```
+
+### Checkboxes y selects
+
+```java
+WebUI.marcar(By locator)                 WebUI.desmarcar(By locator)
+WebUI.seleccionarPorTexto(By locator, String texto)
+WebUI.seleccionarPorValor(By locator, String valor)
+WebUI.seleccionarPorIndice(By locator, int indice)
+WebUI.opcionSeleccionada(By locator)     WebUI.todasLasOpciones(By locator)
+```
+
+### Scroll y pausa
+
+```java
+WebUI.scrollHasta(By locator)    WebUI.scrollAlFinal()    WebUI.scrollAlInicio()
+WebUI.pausa(int milisegundos)    // deja un WARN en el log en cada uso
+```
+
+---
+
+## Esperas
+
+`WaitUtils` centraliza toda la espera explícita. El timeout por defecto sale de
+`explicit.timeout`.
+
+```java
+WaitUtils.visible(By locator)                  WaitUtils.visible(By locator, int segundos)
+WaitUtils.clickeable(By locator)               WaitUtils.clickeable(By locator, int segundos)
+WaitUtils.presente(By locator)                 WaitUtils.todosVisibles(By locator)
+WaitUtils.invisible(By locator)                WaitUtils.urlContiene(String fragmento)
+WaitUtils.textoEs(By locator, String texto)    WaitUtils.alerta()
+
+WaitUtils.hasta(ExpectedCondition<T> condicion, int segundos)    // lanza si no se cumple
+WaitUtils.seCumple(ExpectedCondition<?> condicion, int segundos) // devuelve boolean
+WaitUtils.estaVisible(By locator, int segundos)
+```
+
+---
+
+## Alertas, frames, ventanas y tablas
+
+```java
+// AlertUtils
+AlertUtils.aceptar()        AlertUtils.descartar()     AlertUtils.obtenerTexto()
+AlertUtils.responder(String texto)                     AlertUtils.hayAlerta()
+AlertUtils.aceptarSiHay()   // no lanza si no hay; lo usa el cierre del navegador
+
+// FrameUtils
+FrameUtils.entrar(int indice)       FrameUtils.entrar(String nombreOId)
+FrameUtils.entrar(By locator)       FrameUtils.entrarAnidados(String... nombres)
+FrameUtils.volverAlRaiz()           FrameUtils.subirUnNivel()
+FrameUtils.textoDentroDe(String... nombres)   // entra, lee y vuelve al raíz
+
+// WindowUtils
+WindowUtils.handles()               WindowUtils.handleActual()
+WindowUtils.cantidad()              WindowUtils.cambiarA(int indice)
+WindowUtils.cambiarAlTitulo(String titulo)
+WindowUtils.volverALaPrincipal()    WindowUtils.cerrarLasDemas()
+
+// TableUtils — el primer parámetro es la clave del locator de la tabla
+TableUtils.encabezados(String tabla)
+TableUtils.cantidadDeFilas(String tabla)
+TableUtils.celda(String tabla, int fila, int columna)
+TableUtils.indiceDeColumna(String tabla, String encabezado)
+TableUtils.columna(String tabla, String encabezado)
+TableUtils.comoMapa(String tabla)                     // List<Map<String,String>>
+TableUtils.buscarFila(String tabla, String encabezado, String texto)
+```
+
+---
+
+## Locators
+
+Los selectores viven fuera del código, en `src/test/resources/objects/*.properties`,
+con formato `tipo:valor`:
 
 ```properties
-login.boton=css:[data-test='login-button']
-inventario.agregar=css:[data-test='add-to-cart-{0}']
+login.usuario = css:[data-test='username']
+login.boton   = id:login-button
+producto.porNombre = xpath://div[text()='{0}']/ancestor::div[@class='item']
 ```
 
-Cambiar un selector no requiere recompilar ni saber Java. Y `{0}` permite
-parametrizarlos: `LocatorHelper.by("inventario.agregar", "sauce-labs-backpack")`.
-Las páginas del proyecto de ejemplo no declaran un solo `By`.
-
-### Configuración con precedencia uniforme
-
-`variable de entorno > propiedad de sistema > archivo del perfil > error`
-
-Todas las claves admiten override, sin excepciones. Una clave que solo se puede
-cambiar editando un archivo es una clave que no se puede cambiar desde el CI. Y
-una clave faltante o mal tipada falla en el momento, con un mensaje que la nombra,
-en vez de propagarse como `null` y explotar tres capas más abajo.
-
-### `ThreadLocal` en `DriverManager`
-
-Con TestNG y suites paralelas no hay contenedor que aísle por caso: cada hilo
-necesita su propio driver. `remove()` en el teardown no es opcional — sin él, el
-hilo del pool conserva la referencia a un driver cerrado y el test siguiente lo
-recibe muerto.
-
-### Un navegador por método, no por clase
-
-Cuesta unos segundos por caso y elimina una categoría entera de fallos en cascada:
-un test que deja el navegador en un estado raro no puede arruinar al siguiente.
-
-### Implicit wait en cero
-
-Toda la espera es explícita y vive en `WaitUtils`. Mezclar los dos mecanismos
-produce tiempos impredecibles y difíciles de diagnosticar.
-
-### Los tests no hablan con el reporte
-
-Lo hace `TestListener`. Un caso se lee como lo que prueba, no como lo que
-registra, y cambiar de herramienta de reporte no toca ni un test.
-
-### Sin binarios de driver versionados
-
-Selenium Manager los resuelve. Un `chromedriver.exe` commiteado deja de servir
-apenas el navegador se actualiza.
-
-### El recurso a JavaScript está medido, no escondido
-
-En ciertos elementos, ningún input mediado por WebDriver llega a la página: ni
-`element.click()`, ni `Actions.moveToElement().click()`, ni enfocar y mandar
-ENTER. Se verificó instrumentando el documento con un listener propio, y no llega
-ningún evento — mientras el elemento mide impecable: único que matchea el
-selector, conectado al documento, habilitado, en el viewport, y `elementFromPoint`
-lo devuelve a él. Solo la invocación directa por DOM funciona.
-
-Se reprodujo en Windows y Linux, headless y con navegador visible, en máquina
-local y en CI. No es del entorno ni del test.
-
-Por eso `WebUI` recurre a JavaScript como último recurso. Y para que eso no se
-convierta en una muleta cómoda, cada uso **se cuenta**, **aparece en el encabezado
-del reporte** y hay un **umbral que rompe el build**. Si el número crece, la
-respuesta es ver qué elemento nuevo lo necesita, no subir el umbral.
-
-Esa métrica ya se pagó sola: mostró que la suite del Grid perdía 10 segundos
-reintentando clicks que nunca iban a funcionar. Contar los reintentos exitosos en
-unas 120 ejecuciones dio **cero**, así que la escalera bajó de 3 intentos a 2 y la
-suite pasó de 34 a 24 segundos.
-
-### Fallos tolerados que igual terminan en rojo
-
-`WebUI` acepta una política por acción: `OPTIONAL` para lo que legítimamente puede
-no estar (un banner de cookies), `CONTINUE_ON_FAILURE` para juntar varios fallos y
-verlos todos de una en vez de arreglar de a uno.
-
-`SoftFailureListener` da vuelta el resultado del caso a FAILURE si terminó con
-fallos tolerados. Sin esa pieza, `CONTINUE_ON_FAILURE` sería una forma elegante de
-esconder errores.
-
-### UI y API separadas, con un puente explícito
-
-Son dos capas con bases distintas: `BaseTest` levanta navegador, `BaseApiTest` no.
-Los 17 casos de API corren en 6 segundos; forzarlos por la base de UI sería
-levantar 17 Chrome para no usarlos.
-
-Lo que las conecta es `fixtures/`, y la distinción importa:
-
-| | La API es… | Vive en | Corre en |
-|---|---|---|---|
-| Tests de API | el sujeto bajo prueba | `projects/dummyjson/` | suite `api` |
-| Fixtures | una herramienta para conseguir datos | `fixtures/` | los usan tests de UI |
-
-Un test de UI llama a `ProductosFixture.algunos(3)` y no sabe que eso salió de
-HTTP. Si mañana el dato viene de una base de datos, cambia el fixture y ningún
-test se entera. Si la API no responde, el error dice que **falló una precondición**,
-no que falló la aplicación bajo prueba.
-
-### El intercambio HTTP siempre queda en el reporte
-
-`ApiLogFilter` adjunta request y response completos a cada caso, sin que el test
-pida nada. Cuando un test de API falla, eso es exactamente lo que hace falta y lo
-único que evita tener que reproducirlo a mano.
-
-Las cabeceras sensibles se enmascaran: un reporte de CI circula, y un token pegado
-ahí es una credencial filtrada.
-
-### Contratos versionados, no solo esquemas
-
-El JSON Schema verifica que la respuesta tenga la forma esperada hoy.
-`ContractGuard` responde otra pregunta: ¿sigue siendo compatible con la que había
-cuando el contrato se acordó?
-
-Y solo reporta lo que rompe de verdad. Que **aparezca** un campo no rompe a nadie:
-quien no lo conoce lo ignora. Que **desaparezca**, o que **cambie de tipo**, rompe
-a todos los que lo leían. El contrato vive versionado en `contracts/`, así que un
-cambio deja rastro en el historial.
-
-### La base de datos responde lo que una pantalla no puede
-
-Un checkout que muestra "gracias por tu compra" pero no dejó la orden en la base
-es un test de UI que pasa y un bug que se escapa. `DatabaseHelper` hace esas
-preguntas: ¿el total de la orden coincide con la suma de sus ítems? ¿un cliente
-dado de baja tiene pendientes? ¿un producto sin stock aparece en órdenes activas?
-
-Corre contra un **Postgres real** levantado por Testcontainers, no contra una base
-embebida: el dialecto, los tipos y el comportamiento transaccional son los de
-producción. Un contenedor por suite, no por caso.
-
-**La suite de base corre aparte porque requiere Docker.** `mvn test` sigue
-funcionando sin él, así que la promesa de clonar y correr se mantiene.
-
-Y qué pasa si Docker no está depende del perfil: **en local omite** con el motivo,
-**en CI rompe el build**. Omitir en CI dejaría el job en verde sin haber probado
-nada, que es la misma mentira que un `testFailureIgnore`. Los dos caminos se
-verificaron rompiendo el arranque del contenedor a propósito.
-
-### Los fixtures no dicen de dónde vienen los datos
+Se resuelven con `LocatorHelper`:
 
 ```java
-ProductosFixture.algunos(3);              // detrás hay HTTP
-ClientesFixture.usuarioActivo();          // detrás hay SQL
+LocatorHelper.by("login.usuario")
+LocatorHelper.by("producto.porNombre", "Sauce Labs Backpack")   // reemplaza {0}, {1}...
 ```
 
-Los dos exponen métodos en lenguaje de dominio, y quien los consume no sabe cuál
-es cuál. Esa simetría es lo que hace que la abstracción sirva: cambiar la fuente
-de un dato toca un archivo y ningún test.
+Tipos admitidos: `id`, `name`, `css`, `xpath`, `class`, `tag`, `link`, `partialLink`.
 
-`DatabaseHelper` devuelve `List<Map<String,String>>`, la misma forma que
-`ExcelHelper`. Un `@DataProvider` puede pasar de leer una planilla a leer la base
-sin que ningún test lo note.
+Un locator inexistente, sin tipo o con un tipo desconocido falla nombrándolo y
+explicando el formato correcto.
 
-### El mismo suite corre local o contra un Grid
+---
+
+## Manejo de fallos
+
+Los métodos de `WebUI` que pueden fallar tienen una sobrecarga que recibe una
+política:
+
+| `FailureHandling` | Qué hace al fallar |
+|---|---|
+| `STOP_ON_FAILURE` | relanza y corta el caso (comportamiento por defecto) |
+| `CONTINUE_ON_FAILURE` | registra el fallo y sigue; el caso termina en rojo al final |
+| `OPTIONAL` | lo deja en el log de debug y no cuenta como fallo |
+
+```java
+WebUI.click(banner, FailureHandling.OPTIONAL);
+WebUI.escribir(campo, texto, FailureHandling.CONTINUE_ON_FAILURE);
+
+// Para envolver cualquier acción propia
+WebUI.intentar("cerrar el modal", () -> cerrarModal(), FailureHandling.OPTIONAL);
+```
+
+Sobrecargas disponibles: `click`, `escribir`, `limpiarYEscribir`,
+`seleccionarPorTexto`, `marcar`, `desmarcar`, `hover`, `verificarAccesibilidad`.
+
+`SoftFailures` acumula los fallos tolerados por hilo, y `SoftFailureListener` da
+vuelta el resultado del caso a FAILURE si terminó con alguno:
+
+```java
+SoftFailures.hay()      SoftFailures.cantidad()    SoftFailures.registrados()
+SoftFailures.resumen()  SoftFailures.limpiar()
+```
+
+---
+
+## Recurso a JavaScript
+
+Cuando un click o un `sendKeys` no produce efecto, `WebUI` puede rodearlo
+invocando el DOM directamente. Se controla por perfil:
+
+```properties
+webui.fallback.js.enabled = true
+webui.fallback.js.max     = 10
+```
+
+Cada uso se cuenta y queda registrado:
+
+```java
+FallbackTracker.cantidad()    FallbackTracker.usos()
+FallbackTracker.resumen()     FallbackTracker.limpiar()
+```
+
+`FallbackGuardListener` publica el total en el encabezado del reporte, y
+`FallbackGuardTest` corre como un caso más al final de la suite y **falla el
+build** si el total supera `webui.fallback.js.max`.
+
+---
+
+## API
+
+**`ApiClient`** tiene los verbos en tres variantes: anónima, autenticada con el
+token del hilo, y con un token explícito.
+
+```java
+// Anónimas
+ApiClient.get(String ruta)                  ApiClient.get(String ruta, Map<String,?> parametros)
+ApiClient.post(String ruta, Object cuerpo)  ApiClient.put(String ruta, Object cuerpo)
+ApiClient.patch(String ruta, Object cuerpo) ApiClient.delete(String ruta)
+
+// Con el token del hilo (AuthManager)
+ApiClient.getAuth(...)   ApiClient.postAuth(...)   ApiClient.putAuth(...)   ApiClient.deleteAuth(...)
+
+// Con un token explícito
+ApiClient.getConToken(String ruta, String token)
+ApiClient.postConToken(String ruta, Object cuerpo, String token)
+ApiClient.patchConToken(String ruta, Object cuerpo, String token)
+ApiClient.deleteConToken(String ruta, String token)
+
+// Specs de RestAssured, si hace falta bajar un nivel
+ApiClient.anonimo()   ApiClient.autenticado()   ApiClient.conToken(String token)
+ApiClient.autenticadoComo(String usuario, String password)
+```
+
+**`ApiResponse`** encadena aserciones cuyo mensaje de fallo incluye el cuerpo de
+la respuesta:
+
+```java
+ApiClient.get("/products/1")
+    .tieneCodigo(200)
+    .tieneCampo("title")
+    .campoEs("id", 1)
+    .respondeEnMenosDe(2000)
+    .cumpleElEsquema("producto.json");     // JSON Schema en resources/schemas/
+```
+
+Lectura:
+
+```java
+respuesta.codigo()      respuesta.cuerpo()      respuesta.tiempoMs()
+respuesta.cabecera("X-Total-Count")             respuesta.campo("data.id")
+respuesta.comoMapa()    respuesta.comoObjeto(Producto.class)
+respuesta.comoListaDe("products", Producto.class)
+respuesta.esExitosa()   respuesta.response()    // el Response crudo
+```
+
+**`AuthManager`** guarda el token JWT por hilo:
+
+```java
+AuthManager.token()        // login con api.usuario / api.password, y lo cachea
+AuthManager.tokenDe(String usuario, String password)
+AuthManager.hayToken()     AuthManager.limpiar()
+```
+
+**`ContractGuard`** compara la respuesta contra un contrato versionado en
+`resources/contracts/` y devuelve solo los cambios que rompen: campos que
+desaparecieron o que cambiaron de tipo.
+
+```java
+List<String> problemas = ContractGuard.cambiosRompientes("producto", respuesta);
+```
+
+**`Paginador`** recorre un endpoint paginado y devuelve todo junto, con tope de
+50 páginas:
+
+```java
+List<Producto> todos = Paginador.todos("/products", "products", "total", 30, Producto.class);
+```
+
+**Filtros** que se aplican solos a toda petición:
+
+- `ApiLogFilter` deja el intercambio HTTP en el reporte, enmascarando
+  `authorization`, `cookie` y `x-api-key`, y truncando a 4000 caracteres.
+- `RateLimitFilter` reintenta ante un 429 respetando `Retry-After`, con respaldo
+  exponencial y un máximo de 3 reintentos.
+
+---
+
+## Base de datos
+
+**`DatabaseManager`** administra el pool (HikariCP):
+
+```java
+DatabaseManager.conectar();                              // según el perfil
+DatabaseManager.conectar(String url, String usuario, String password);
+DatabaseManager.conexion()    DatabaseManager.hayConexion()    DatabaseManager.cerrar();
+```
+
+**`DatabaseHelper`** consulta y ejecuta con `PreparedStatement`:
+
+```java
+DatabaseHelper.consultar("SELECT * FROM cliente WHERE pais = ?", "AR");  // List<Map<String,String>>
+DatabaseHelper.valorUnico("SELECT email FROM cliente WHERE id = ?", 7);  // Optional<String>
+DatabaseHelper.contar("SELECT COUNT(*) FROM pedido WHERE estado = ?", "abierto");
+DatabaseHelper.existe("SELECT 1 FROM cliente WHERE email = ?", email);
+DatabaseHelper.ejecutar("UPDATE cliente SET activo = false WHERE id = ?", 7);
+DatabaseHelper.ejecutarScript(SqlLoader.cargar("esquema"));
+DatabaseHelper.enTransaccion(List.of(sql1, sql2));       // todo o nada
+```
+
+`consultar` devuelve la misma forma que `ExcelHelper.leerHoja`: una lista de
+mapas columna → valor.
+
+**`SqlLoader`** lee el SQL de `resources/sql/`, así no vive dentro del Java:
+
+```java
+SqlLoader.cargar("pedidos-abiertos")     // resources/sql/pedidos-abiertos.sql
+SqlLoader.limpiarCache()
+```
+
+---
+
+## Datos para los tests
+
+### Excel y JSON
+
+```java
+ExcelHelper.leerHoja("data/usuarios.xlsx", "login")           // List<Map<String,String>>
+ExcelHelper.comoDataProvider("data/usuarios.xlsx", "login")   // Object[][]
+ExcelHelper.escribirHoja(ruta, hoja, filas)
+
+JsonHelper.comoMapa("data/usuario.json")
+JsonHelper.comoLista("data/usuarios.json")
+JsonHelper.comoObjeto("data/usuario.json", Usuario.class)
+JsonHelper.comoListaDe("data/usuarios.json", Usuario.class)
+JsonHelper.escribir("data/salida.json", objeto)
+JsonHelper.aTexto(objeto)
+```
+
+La primera fila de la hoja de Excel son los encabezados. Conserva los ceros a la
+izquierda y no usa notación científica.
+
+### DataProviders
+
+`DataProviderManager` expone los datos con el formato que espera TestNG:
+
+```java
+@Test(dataProvider = "usuariosJson", dataProviderClass = DataProviderManager.class)
+public void login(Map<String, String> usuario) { ... }
+```
+
+Disponibles: `usuariosJson`, `usuariosExcel`, `usuariosJsonParalelo`.
+
+### Datos inventados
+
+```java
+FakeDataUtils.nombre()        FakeDataUtils.apellido()      FakeDataUtils.nombreCompleto()
+FakeDataUtils.empresa()       FakeDataUtils.telefono()      FakeDataUtils.ciudad()
+FakeDataUtils.direccion()     FakeDataUtils.codigoPostal()
+FakeDataUtils.email()         // único por llamada
+FakeDataUtils.password()      FakeDataUtils.texto(int palabras)
+FakeDataUtils.numeroEntre(int desde, int hasta)
+```
+
+### Fixtures
+
+Un fixture consigue datos reales para que los use otro test. Quien los consume
+no sabe de dónde salieron:
+
+```java
+// Los trae por HTTP
+ProductosFixture.algunos(int cantidad)   ProductosFixture.masCaro()
+ProductosFixture.categorias()
+
+// Los trae por SQL
+ClientesFixture.usuarioActivo()          ClientesFixture.usuarioInactivo()
+ClientesFixture.usuarioConComprasConfirmadas()
+ClientesFixture.productosConStock()
+```
+
+### Fechas
+
+```java
+DateUtils.hoy()        DateUtils.ahora()      DateUtils.timestampParaArchivo()
+DateUtils.formatear(LocalDate fecha, String patron)
+DateUtils.sumarDias(long dias, String patron)
+DateUtils.restarDias(long dias, String patron)
+```
+
+---
+
+## Accesibilidad
+
+`WebUI.verificarAccesibilidad` inyecta **axe-core**, analiza la página y compara
+contra una línea base versionada:
+
+```java
+WebUI.verificarAccesibilidad("saucedemo-login");
+WebUI.verificarAccesibilidad("saucedemo-inventario", FailureHandling.CONTINUE_ON_FAILURE);
+```
+
+Falla —con `AccesibilidadException`— solo si **aparece una regla nueva** o si
+**crece la cantidad de elementos** de una ya conocida. Todas las violaciones,
+nuevas o viejas, quedan en el reporte como una tabla con la regla, el impacto,
+cuántos elementos y el enlace a la documentación.
+
+La línea base es un archivo por pantalla en `src/test/resources/a11y/`:
+
+```properties
+# src/test/resources/a11y/saucedemo-inventario.properties
+select-name=1
+```
+
+Se regenera con:
+
+```bash
+mvn test -Da11y.actualizar=true
+```
+
+Si una regla mejora o desaparece, no falla: lo avisa en el log para que se pueda
+bajar la línea base.
+
+Las reglas evaluadas salen de `a11y.tags`, por defecto
+`wcag2a,wcag2aa,wcag21a,wcag21aa`.
+
+Acceso directo, sin línea base:
+
+```java
+List<ViolacionA11y> violaciones = AnalisisA11y.analizar();
+List<ViolacionA11y> soloAhi     = AnalisisA11y.analizar(By.id("carrito"));
+AnalisisA11y.reportar("login", violaciones);
+
+// Cada violación: regla(), impacto(), ayuda(), ayudaUrl(), elementos(), cantidad(), gravedad()
+```
+
+Manejo de la línea base:
+
+```java
+LineaBaseA11y.existe("login")       LineaBaseA11y.leer("login")
+LineaBaseA11y.guardar("login", violaciones)
+LineaBaseA11y.regresiones("login", violaciones)    // lo que empeoró
+LineaBaseA11y.enModoActualizacion()
+```
+
+---
+
+## Reportes y evidencia
+
+Cada corrida genera dos reportes:
+
+| Reporte | Dónde | Cómo verlo |
+|---|---|---|
+| ExtentReports | `reports/ExtentReport.html` | se abre solo, con las imágenes embebidas |
+| Allure | `allure-results/` | `mvn allure:serve` |
+
+Los tests no escriben en el reporte: lo hace `TestListener`. Cuando un caso
+falla, captura el screenshot **antes** de que se cierre el navegador y lo embebe
+en el HTML, además de guardarlo en `evidence/`.
+
+Para escribir en el reporte desde un paso propio:
+
+```java
+ExtentTestManager.info("...")        ExtentTestManager.ok("...")
+ExtentTestManager.advertencia("...") ExtentTestManager.fallo("...")
+ExtentTestManager.omitido("...")     ExtentTestManager.falloConEvidencia("...")
+
+AllureManager.adjuntarScreenshot(String nombre)
+AllureManager.adjuntarTexto(String nombre, String contenido)
+AllureManager.adjuntarHtml(String nombre, String html)
+AllureManager.paso(String descripcion)    AllureManager.descripcion(String texto)
+```
+
+Capturas a mano:
+
+```java
+CaptureHelper.comoBytes()     CaptureHelper.comoBase64()
+CaptureHelper.aArchivo(String nombre)    CaptureHelper.aArchivoSinFallar(String nombre)
+```
+
+### Metadatos del caso
+
+`@FrameworkAnnotation` agrega autor, categoría y descripción al reporte:
+
+```java
+@Test(groups = "regresion", description = "Un usuario válido llega al listado")
+@FrameworkAnnotation(autor = "Agustín", categoria = {"smoke", "login"})
+public void usuarioValidoAccedeAlInventario() { ... }
+```
+
+### Información del entorno
+
+```java
+BrowserInfoUtils.navegador()          BrowserInfoUtils.version()
+BrowserInfoUtils.sistemaOperativo()   BrowserInfoUtils.versionDeJava()
+BrowserInfoUtils.resumen()
+```
+
+---
+
+## Video
+
+Graba lo que pasa en el navegador durante cada caso y guarda un MP4 en `videos/`.
+Funciona local y en CI, headless o no, sin Grid y sin ffmpeg instalado.
+
+```bash
+mvn test                              # graba todo, guarda solo lo que falla
+mvn test -DVIDEO_CUANDO=SIEMPRE       # guarda todos
+mvn test -DVIDEO_CUANDO=NUNCA         # no graba
+```
+
+Un archivo por caso, con el nombre `Clase.metodo-<timestamp>.mp4`. La ruta del
+video queda anotada en el reporte del caso.
+
+**Cobertura:**
+
+| | Local o CI sin Grid | Con Grid |
+|---|---|---|
+| Chrome · Edge | sí, por CDP | sí, contenedor de video |
+| Firefox | no | sí, contenedor de video |
+
+En Firefox no graba, lo dice en el log, y el caso corre igual.
+
+Se arranca y se corta desde `TestListener`, así que no hay que hacer nada en los
+tests. Uso directo, si hiciera falta:
+
+```java
+VideoRecorder.iniciar("MiTest.miCaso")
+VideoRecorder.marcarParaConservar()
+VideoRecorder.detener()        // Optional<Path>
+VideoRecorder.grabando()       VideoRecorder.politica()
+```
+
+Ajustes por perfil o variable de entorno:
+
+| Clave | Por defecto | Qué controla |
+|---|---|---|
+| `video.cuando` | `FALLOS` | `SIEMPRE`, `FALLOS` o `NUNCA` |
+| `video.fps` | `4` | cuadros por segundo del MP4 |
+| `video.ancho` | `640` | ancho máximo del cuadro |
+| `video.alto` | `512` | alto máximo del cuadro |
+| `video.calidad` | `60` | calidad JPEG de cada cuadro |
+| `video.max.cuadros` | `900` | tope por caso |
+
+---
+
+## Notificaciones por mail
+
+Al terminar la suite manda un resumen de la corrida. `ResumenDeCorrida` arma el
+resumen y `EmailNotifier` lo envía; son piezas separadas.
+
+**Se configura solo por variables de entorno**, nunca por archivo del perfil:
+
+| Variable | Obligatoria | Por defecto |
+|---|---|---|
+| `MAIL_SMTP_HOST` | sí | — |
+| `MAIL_DESTINATARIOS` | sí | — (separados por coma) |
+| `MAIL_SMTP_PUERTO` | no | `587` |
+| `MAIL_USUARIO` | no | sin usuario no hay autenticación ni TLS |
+| `MAIL_PASSWORD` | no | — |
+| `MAIL_REMITENTE` | no | `MAIL_USUARIO` |
+| `MAIL_CUANDO` | no | `FALLOS` (`SIEMPRE`, `FALLOS`, `NUNCA`) |
+
+Si falta `MAIL_SMTP_HOST` o `MAIL_DESTINATARIOS`, no hace nada y lo registra en
+debug. Un error al enviar se registra y **nunca hace fallar la suite**.
+
+```bash
+export MAIL_SMTP_HOST=smtp.gmail.com MAIL_SMTP_PUERTO=587
+export MAIL_USUARIO=... MAIL_PASSWORD=...       # contraseña de aplicación
+export MAIL_DESTINATARIOS=equipo@ejemplo.com
+mvn test
+```
+
+El listener está registrado en `regression.xml`. Para otras suites, agregar:
+
+```xml
+<listener class-name="com.silveira.listeners.NotificacionListener"/>
+```
+
+### La plantilla
+
+El cuerpo sale de `src/main/resources/templates/mail-resumen.html`. Se reemplaza
+sin tocar código:
+
+```bash
+export MAIL_PLANTILLA=/ruta/a/mi-plantilla.html
+export MAIL_ASUNTO="{{estado}} · {{suite}} · {{fallados}} fallaron"
+```
+
+**Parámetros:** `suite`, `entorno`, `navegador`, `duracion`, `estado`, `color`,
+`pasados`, `fallados`, `omitidos`, `total`, `urlReporte`.
+
+**Secciones:**
+
+| Sintaxis | Qué hace |
+|---|---|
+| `{{#fallos}}...{{/fallos}}` | repite el bloque por cada caso fallado, con `clase`, `metodo`, `nombreCompleto` y `mensaje` |
+| `{{#hayFallos}}...{{/hayFallos}}` | incluye el bloque solo si algo falló |
+| `{{^hayFallos}}...{{/hayFallos}}` | lo incluye solo si no falló nada |
+| `{{#urlReporte}}...{{/urlReporte}}` | solo si hay `REPORTE_URL` configurada |
+
+```html
+<h2 style="color:{{color}}">{{suite}} en {{entorno}} — {{duracion}}</h2>
+{{#hayFallos}}
+  <ul>{{#fallos}}<li>{{clase}}.{{metodo}}: {{mensaje}}</li>{{/fallos}}</ul>
+{{/hayFallos}}
+```
+
+Los valores se escapan como HTML al sustituirlos. Un parámetro mal escrito queda
+visible en el mail en vez de desaparecer.
+
+`REPORTE_URL` es el enlace al reporte que va en el cuerpo. Si no está, el bloque
+del enlace no se incluye.
+
+---
+
+## Listeners
+
+Se declaran en el `<listeners>` de cada XML de suite.
+
+| Listener | Cuándo actúa | Qué hace |
+|---|---|---|
+| `TestListener` | por caso | crea la entrada del reporte, captura evidencia al fallar, arranca y corta el video |
+| `AnnotationTransformer` | al armar la suite | aplica `RetryAnalyzer` a todos los casos |
+| `RetryAnalyzer` | al fallar un caso | lo reintenta hasta `retry.count` veces |
+| `SoftFailureListener` | después de cada caso | pasa el caso a FAILURE si quedaron fallos tolerados |
+| `FallbackGuardListener` | al terminar la suite | publica el uso de JavaScript en el reporte |
+| `NotificacionListener` | al terminar la suite | arma el resumen, lo loguea y lo manda por mail |
+
+---
+
+## Suites
+
+Los XML están en `src/test/resources/suites/`.
+
+| Suite | Contenido | Requiere |
+|---|---|---|
+| `unit` | lógica pura del framework | nada |
+| `smoke` | camino crítico | navegador |
+| `regression` | unitarios + UI + guardias | navegador |
+| `parallel` | subconjunto en 4 hilos | navegador |
+| `api` | DummyJSON, 2 hilos | red |
+| `db` | Postgres real | Docker |
+| `grid` | camino crítico contra el Grid | Docker |
+| `app` | cruce entre capas | Docker |
+| `cucumber` | los features | navegador |
+
+`git clone && mvn test` corre sin Docker. Las suites que lo necesitan están
+separadas.
+
+---
+
+## Cucumber
+
+Camino opcional sobre las mismas páginas y el mismo `WebUI`:
+
+```bash
+mvn test -Pcucumber
+```
+
+- Features en `src/test/resources/features/`
+- Steps en `src/test/java/com/silveira/cucumber/steps/`
+- Hooks en `cucumber/hooks/CucumberHooks` — abre y cierra el navegador
+- Runner en `cucumber/runners/CucumberRunner`
+
+---
+
+## Selenium Grid
 
 ```bash
 docker compose -f docker-compose.grid.yml up -d
 mvn test -DsuiteXmlFile=src/test/resources/suites/grid.xml -Denv=grid
+docker compose -f docker-compose.grid.yml down
 ```
 
-Hub y nodos Chrome y Firefox en contenedores, con las versiones fijadas. Un
-`latest` haría que la misma suite corra contra navegadores distintos según el
-día, y cuando algo falla no se sabría si cambió el código o cambió el navegador.
+Levanta un hub y nodos de Chrome y Firefox, con versiones fijadas. Un contenedor
+aparte graba en video la sesión del nodo de Chrome, y los archivos quedan en
+`grid-videos/`.
 
-Lo que cambia en los tests: nada. `TargetFactory` devuelve un `RemoteWebDriver`
-en vez de un `ChromeDriver` y el resto del framework no se entera.
+El perfil `grid` usa `target=GRID` y `grid.url=http://localhost:4444`. El mismo
+test corre sin cambios local o contra el Grid.
 
-**Los nodos graban video de cada sesión.** Para fallos de timing, donde el
-screenshot del final no dice qué pasó, es la diferencia entre diagnosticar y
-adivinar. En CI los videos se publican como artefacto junto al reporte.
+---
 
-Vale ser honesto sobre el alcance: para 58 casos que corren en 90 segundos, el
-Grid es **demostrativo, no necesario**. Su valor real acá fue otro — era lo único
-que ejercitaba la rama `GRID` de `TargetFactory`, que compilaba desde el primer
-día y no la corría nadie.
+## Aplicación propia
 
-### El cruce entre capas
-
-Es lo que el framework no podía demostrar hasta tener una aplicación cuyas tres
-caras fueran suyas: SauceDemo no tiene API, DummyJSON no tiene interfaz, y a la
-base de una app pública no se llega.
+Una aplicación cuya interfaz, API y base de datos son todas accesibles, para
+poder verificar una misma acción por los tres caminos.
 
 ```bash
 docker compose -f docker-compose.app.yml up -d
@@ -283,10 +863,25 @@ docker compose -f docker-compose.app.yml up -d
 mvn test -DsuiteXmlFile=src/test/resources/suites/app.xml -Denv=app
 ```
 
-Levanta Gitea con Postgres. **El código de la aplicación no vive en este
-repositorio**: solo el compose que baja las imágenes y el script que la prepara.
+Levanta Gitea con Postgres. El código de la aplicación no vive en el repositorio:
+solo el compose y el script que la deja usable. `preparar-app.sh` es idempotente:
+crea el usuario, genera el token de API y crea el repositorio de pruebas.
 
-Con eso, una acción hecha por un camino se verifica por los otros dos:
+El token queda en `src/test/resources/config/.app-token`, que no se versiona.
+
+Las piezas del proyecto:
+
+```java
+AppApi.crearIssue(titulo, cuerpo)    AppApi.obtenerIssue(numero)
+AppApi.cerrarIssue(numero)           AppApi.titulosDeIssues()
+AppApi.cantidadDeIssuesAbiertos()    AppApi.quienSoy()
+
+app.ingresar()                       app.crearIssue(titulo, cuerpo)
+app.titulosDeIssues()                app.existeElIssueConTitulo(titulo)
+app.cantidadDeIssuesAbiertos()       app.haySesionIniciada()
+```
+
+Y la verificación cruzada:
 
 ```java
 int numero = AppApi.crearIssue(titulo, cuerpo).tieneCodigo(201).campo("number");
@@ -297,205 +892,98 @@ app.ingresar();
 assertThat(app.existeElIssueConTitulo(titulo)).isTrue();    // y se ve en pantalla
 ```
 
-Por qué importa: un checkout que muestra "gracias por tu compra" pero no dejó la
-orden en la base es un test de interfaz que pasa y un bug que llega a producción.
-Ninguna de las tres capas por separado lo detecta.
+---
 
-El token de API lo genera el script y queda en un archivo ignorado por git. Una
-credencial dentro del repositorio es una credencial filtrada, aunque la aplicación
-corra en localhost.
+## Estructura de carpetas
 
-### Accesibilidad que falla solo cuando empeora
+```
+src/main/java/com/silveira/          EL FRAMEWORK
+├── config/          ConfigManager · FrameworkConstants
+├── driver/          DriverManager · BrowserFactory · TargetFactory
+├── enums/           Browser · Target · Platform · FailureHandling
+├── exceptions/      FrameworkException y 5 derivadas
+├── keywords/        WebUI · WaitUtils · AlertUtils · FrameUtils · WindowUtils
+│                    TableUtils · SoftFailures · FallbackTracker
+├── api/             ApiClient · ApiResponse · AuthManager · ContractGuard
+│                    Paginador · ApiLogFilter · RateLimitFilter
+├── db/              DatabaseManager · DatabaseHelper · SqlLoader
+├── a11y/            AnalisisA11y · LineaBaseA11y · ViolacionA11y
+├── video/           VideoRecorder · ConexionCdp · CodificadorMp4
+├── notifications/   ResumenDeCorrida · EmailNotifier · Plantilla
+├── helpers/         Properties · Locator · Json · Excel · File · Capture
+├── utils/           Log · Date · FakeData · BrowserInfo
+├── reports/         ExtentReportManager · ExtentTestManager · AllureManager
+└── annotations/     FrameworkAnnotation
 
-`WebUI.verificarAccesibilidad("login")` inyecta **axe-core** y compara contra una
-línea base versionada de esa pantalla.
+src/main/resources/
+├── log4j2.xml
+└── templates/       mail-resumen.html
 
-```java
-login.ingresarYEsperarInventario("standard_user", password());
-inventario.agregarAlCarrito("Sauce Labs Backpack");
+src/test/java/com/silveira/          QUIEN LO USA
+├── common/          BaseTest · BaseApiTest · BaseDbTest · BaseAppTest
+├── listeners/       los seis listeners
+├── dataprovider/    DataProviderManager
+├── fixtures/        ProductosFixture (API) · ClientesFixture (base)
+├── guards/          FallbackGuardTest
+├── projects/        saucedemo · theinternet · dummyjson · tienda · app
+└── cucumber/        runner, steps y hooks
 
-WebUI.verificarAccesibilidad("saucedemo-inventario", FailureHandling.CONTINUE_ON_FAILURE);
+src/test/resources/
+├── config/          un .properties por ambiente
+├── suites/          los nueve XML
+├── objects/         locators externalizados
+├── schemas/         JSON Schema de las respuestas
+├── contracts/       contratos versionados de los endpoints
+├── a11y/            línea base de accesibilidad por pantalla
+├── sql/             consultas y scripts fuera del Java
+├── data/            JSON y Excel para los DataProviders
+└── features/        los .feature de Cucumber
+
+Salidas (todas ignoradas por git)
+reports/  evidence/  videos/  grid-videos/  logs/  allure-results/
 ```
 
-Que sea un método de `WebUI` y no una familia de casos aparte es la decisión que
-importa: así se suma una línea a los casos que ya existen, y la pantalla se revisa
-con sus datos y su estado reales en vez de vacía.
+---
 
-**El problema que resuelve la línea base.** Sumar accesibilidad a una aplicación
-que ya existe encuentra decenas de violaciones legítimas y anteriores al cambio
-que se está probando. Si eso hace fallar la suite, la suite queda roja el primer
-día y el equipo aprende a ignorarla; si no hace fallar nada, la accesibilidad no
-está probada. La salida es la misma que ya usa `ContractGuard`: guardar el estado
-conocido y fallar únicamente cuando aparece una regla nueva o crece la cantidad de
-elementos de una existente. Lo viejo se reporta siempre, y no rompe.
+## Todas las claves de configuración
 
-```properties
-# src/test/resources/a11y/saucedemo-inventario.properties
-select-name=1
-```
+### Del perfil, variable de entorno o `-D`
 
-Se versiona a propósito: es la única forma de que "esto ya estaba" sea verificable
-y no la memoria de alguien. Se regenera con `mvn test -Da11y.actualizar=true`.
-
-Una mejora nunca hace fallar, pero se avisa: si una regla baja de 3 a 1, la línea
-base quedó más alta de lo necesario y una regresión posterior hasta ese número
-pasaría desapercibida.
-
-**Lo que axe no ve, y conviene decirlo.** Encuentra lo decidible mirando el DOM
-—contraste, textos alternativos, roles ARIA, orden de encabezados— y ronda el 30%
-de los problemas reales. Que el orden de tabulación tenga sentido, que un texto
-alternativo describa la imagen, o que un lector de pantalla se entienda, no. Un
-cero de axe no es una página accesible: es una página sin los errores que una
-máquina puede ver sola.
-
-### Video de cada caso que falla, sin Grid y sin ffmpeg
-
-Cuando un caso falla, el screenshot final muestra la pantalla rota pero no cómo
-llegó ahí. El video sí, y ahora sale en cualquier corrida, no solo contra el Grid.
-
-```bash
-mvn test                              # graba y guarda solo los casos que fallan
-mvn test -DVIDEO_CUANDO=SIEMPRE       # guarda todos
-mvn test -DVIDEO_CUANDO=NUNCA         # no graba
-```
-
-Los archivos quedan en `videos/`, uno por caso, y viajan en el artefacto de CI.
-
-**Cómo graba, y por qué así.** Usa el screencast de CDP: el navegador empuja un
-cuadro cada vez que la página cambia. Las dos alternativas habituales no servían:
-
-- **Sacar capturas desde otro hilo** mete comandos concurrentes en una sesión de
-  WebDriver, que procesa uno por vez. En el mejor caso enlentece el caso; en el
-  peor lo rompe con un error ajeno a lo que se estaba probando.
-- **Grabar el escritorio** (Monte y similares) necesita una pantalla real, así que
-  no sirve headless, que es donde más falta hace: en CI.
-
-**El transporte es CDP crudo sobre una websocket del JDK, no `driver.getDevTools()`.**
-Esa API de Selenium viene en paquetes atados a la versión del navegador
-—`selenium-devtools-v137` y compañía—. Selenium 4.33 llega hasta la 137 y el
-Chrome de esta máquina es la 153: devuelve una implementación no-op y no graba
-nada. Actualizar Selenium lo arregla hasta la próxima actualización automática de
-Chrome, cuatro semanas después. Una función que se apaga sola y en silencio es
-peor que no tenerla. Los nombres de los comandos CDP, en cambio, llevan años
-estables.
-
-**El tiempo se reconstruye.** El navegador no manda cuadros a intervalos fijos:
-veinte segundos de espera no producen ninguno. Encadenarlos tal cual daría un
-video donde las esperas no existen, y las esperas son justo lo que uno mira cuando
-investiga un fallo de timing. Cada cuadro se repite tantas veces como haga falta
-para ocupar el tiempo real que estuvo en pantalla.
-
-**Chrome y Edge, no Firefox.** Firefox abandonó CDP y su reemplazo todavía no
-tiene screencast. Ahí no graba, lo dice en el log y el caso sigue igual; para
-cubrir Firefox está el Grid, que filma el display del nodo desde afuera.
-
-| | Local / CI sin Grid | Con Grid |
+| Clave | Ejemplo | Qué controla |
 |---|---|---|
-| Chrome · Edge | ✅ CDP, headless incluido | ✅ contenedor de video |
-| Firefox | ✗ | ✅ contenedor de video |
+| `base.url` | `https://www.saucedemo.com` | URL que abre `BaseTest` |
+| `browser` | `chrome` | `chrome`, `firefox` o `edge` |
+| `headless` | `true` | navegador sin ventana |
+| `target` | `LOCAL` | `LOCAL` o `GRID` |
+| `grid.url` | `http://localhost:4444` | hub del Grid |
+| `page.load.timeout` | `30` | segundos para cargar una página |
+| `explicit.timeout` | `15` | segundos por defecto de `WaitUtils` |
+| `retry.count` | `1` | reintentos de un caso fallado |
+| `webui.fallback.js.enabled` | `true` | permitir el recurso a JavaScript |
+| `webui.fallback.js.max` | `10` | tope antes de romper el build |
+| `api.base.url` | `https://dummyjson.com` | base de las peticiones |
+| `api.timeout` | `30` | segundos de la petición |
+| `api.usuario` · `api.password` | | credenciales de `AuthManager` |
+| `db.url` · `db.user` · `db.password` | | conexión JDBC |
+| `db.pool.size` | `5` | conexiones del pool |
+| `db.timeout` | `15` | segundos de la consulta |
+| `db.requerida` | `true` | si falta la base, ¿falla o se omite? |
+| `a11y.tags` | `wcag2a,wcag2aa` | reglas de axe a evaluar |
+| `video.cuando` | `FALLOS` | ver [Video](#video) |
+| `video.fps` · `video.ancho` · `video.alto` · `video.calidad` · `video.max.cuadros` | | ver [Video](#video) |
+| `reporte.url` | | enlace al reporte que va en el mail |
+| `mail.plantilla` | | ruta a una plantilla propia |
+| `mail.asunto` | | plantilla del asunto |
 
-El MP4 se arma con jcodec, en Java puro: depender de un ffmpeg instalado es
-exactamente lo que no se puede dar por sentado en un runner.
+### Solo por variable de entorno
 
-### Notificaciones: el resumen no sabe por dónde se avisa
+`MAIL_SMTP_HOST` · `MAIL_SMTP_PUERTO` · `MAIL_USUARIO` · `MAIL_PASSWORD` ·
+`MAIL_REMITENTE` · `MAIL_DESTINATARIOS` · `MAIL_CUANDO`
 
-El notificador típico arma el texto del mail mientras recorre los resultados de
-TestNG. Ahí el *qué pasó* y el *por dónde se avisa* quedan pegados: sumar otro
-canal obliga a repetir el recorrido, y probar el formato del mensaje obliga a
-levantar un servidor SMTP.
+### Solo por propiedad de sistema
 
-Acá `ResumenDeCorrida` es un valor y `EmailNotifier` uno de sus consumidores.
-
-```java
-ResumenDeCorrida resumen = ResumenDeCorrida.de(suite);
-LogUtils.info(resumen.asunto());
-EmailNotifier.notificar(resumen);
-```
-
-Cuatro decisiones, todas contra la versión ingenua:
-
-- **Las credenciales salen del entorno y de ningún otro lado.** No hay un
-  `mail.password` en el perfil ni un `get` que pueda caer en un archivo del
-  repositorio. Si el framework no puede leer una contraseña de un archivo
-  versionado, nadie la filtra ahí por accidente.
-- **Sin configuración no hace nada, y eso no es un error.** Un `git clone && mvn
-  test` no se rompe ni se cuelga porque falte un servidor SMTP.
-- **Por defecto avisa solo cuando algo falló** (`MAIL_CUANDO=siempre|fallos|nunca`).
-  Una notificación que llega siempre deja de leerse en una semana, y entonces
-  tampoco se lee la que importa.
-- **Nunca hace fallar la suite.** Con timeouts explícitos, y capturando también
-  `LinkageError`: pintar de rojo una corrida verde porque el servidor de mail
-  estaba caído es informar peor que no informar.
-
-El cuerpo lleva los casos fallados con su primer mensaje y un enlace al reporte,
-en vez del HTML de Extent adjunto: el adjunto pesa varios megas, muchos servidores
-lo bloquean, y obliga a bajarlo para saber si hace falta mirarlo.
-
-**El cuerpo y el asunto son plantillas.** La que viene por defecto está en
-`src/main/resources/templates/mail-resumen.html`, y se reemplaza sin tocar código:
-
-```bash
-export MAIL_PLANTILLA=/ruta/a/mi-plantilla.html
-export MAIL_ASUNTO="{{estado}} · {{suite}} · {{fallados}} fallaron"
-```
-
-```html
-<h2 style="color:{{color}}">{{suite}} en {{entorno}} — {{duracion}}</h2>
-{{#hayFallos}}
-  <ul>{{#fallos}}<li>{{clase}}.{{metodo}}: {{mensaje}}</li>{{/fallos}}</ul>
-{{/hayFallos}}
-```
-
-Parámetros: `suite`, `entorno`, `navegador`, `duracion`, `estado`, `color`,
-`pasados`, `fallados`, `omitidos`, `total`, `urlReporte`. Secciones: `{{#fallos}}`
-repite por caso fallado, `{{#hayFallos}}` incluye el bloque solo si algo falló y
-`{{^hayFallos}}` solo si no.
-
-El motor son cuarenta líneas y no una librería a propósito: Mustache o Freemarker
-son cientos de kilobytes y una sintaxis entera a cambio de nada que esto no haga.
-El día que haga falta un bucle dentro de un bucle, la respuesta correcta no es
-agrandarlo sino reemplazarlo. Lo que sí hace bien es **escapar**: el texto que
-entra son mensajes de error, que es contenido que nadie controla.
-
-```bash
-export MAIL_SMTP_HOST=smtp.gmail.com MAIL_SMTP_PUERTO=587
-export MAIL_USUARIO=... MAIL_PASSWORD=...      # contraseña de aplicación
-export MAIL_DESTINATARIOS=equipo@ejemplo.com
-mvn test
-```
-
-Se verifica contra un SMTP en memoria (GreenMail) en un puerto libre, así que lo
-que está probado es el camino entero —conexión, sobre, asunto, cuerpo— sin casilla
-ni red.
-
-## Cómo agregar algo
-
-Cada paquete tiene un patrón, y agregar una pieza es seguirlo:
-
-| Querés agregar | Va en | Mirá como ejemplo |
-|---|---|---|
-| Una acción de UI nueva | `keywords/WebUI` | cualquier método existente |
-| Un tipo de espera | `keywords/WaitUtils` | `visible`, `urlContiene` |
-| Una fuente de datos | `helpers/` + `dataprovider/` | `ExcelHelper` + `DataProviderManager` |
-| Un navegador | `enums/Browser` + `driver/BrowserFactory` | el caso `EDGE` |
-| Un destino de reporte | `reports/` | `AllureManager` |
-| Un proyecto nuevo | `projects/<nombre>/` + `objects/<nombre>.properties` | `projects/theinternet` |
-| Un endpoint a probar | `projects/<api>/tests/` + `schemas/` | `projects/dummyjson` |
-| Un dato para tests de UI | `fixtures/` | `ProductosFixture` (API) · `ClientesFixture` (base) |
-| Una consulta de verificacion | `sql/` + `projects/tienda/tests/` | `VerificacionesDbTest` |
-| Un caso que cruza capas | `projects/app/` | `CruceDeCapasTest` |
-| Accesibilidad de una pantalla | una línea en un caso que ya existe | `AccesibilidadTest` |
-| Un canal de notificación | `notifications/` + `listeners/NotificacionListener` | `EmailNotifier` |
-| Otro formato de mail | una plantilla propia, sin tocar código | `templates/mail-resumen.html` |
-
-Lo que viene está en [ROADMAP.md](ROADMAP.md).
-
-## Portfolio
-
-Parte de una serie de repos de automatización:
-
-| Repo | Stack | Estado |
-|------|-------|--------|
-| **selenium-automation-framework** (este) | Java · Selenium 4 · TestNG · Cucumber | ✅ |
-| playwright-automation | TypeScript · Playwright | pendiente |
-| cypress-automation | JavaScript · Cypress | pendiente |
+| Propiedad | Qué hace |
+|---|---|
+| `-Denv=<perfil>` | elige el perfil de configuración |
+| `-DsuiteXmlFile=<ruta>` | elige la suite |
+| `-Da11y.actualizar=true` | regenera las líneas base de accesibilidad |
