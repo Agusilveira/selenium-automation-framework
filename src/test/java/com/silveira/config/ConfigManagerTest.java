@@ -88,6 +88,22 @@ public class ConfigManagerTest {
     }
 
     @Test
+    public void unNavegadorInvalidoDesdeElEntornoLoDice() {
+        ConfigManager config = con(props("browser", "chrome"), Map.of("BROWSER", "xdg-open"));
+        assertThatThrownBy(config::browser)
+                .isInstanceOf(FrameworkException.class)
+                .hasMessageContaining("xdg-open")
+                .hasMessageContaining("viene de BROWSER");
+    }
+
+    @Test
+    public void unNavegadorInvalidoDelPerfilNoCulpaAlEntorno() {
+        ConfigManager config = con(props("browser", "netscape"), Map.of());
+        assertThatThrownBy(config::browser)
+                .hasMessageNotContaining("viene de BROWSER");
+    }
+
+    @Test
     public void losDefaultsAplicanSoloSiFaltaLaClave() {
         ConfigManager config = con(props(), Map.of());
         assertThat(config.explicitTimeout()).isEqualTo(FrameworkConstants.TIMEOUT_EXPLICITO_DEFAULT);

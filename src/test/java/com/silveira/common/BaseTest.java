@@ -32,11 +32,11 @@ public abstract class BaseTest {
 
         Browser navegador = (browser == null || browser.isBlank())
                 ? config.browser()
-                : Browser.valueOf(browser.trim().toUpperCase());
+                : Browser.de(browser);
 
         Target destino = (target == null || target.isBlank())
                 ? config.target()
-                : Target.valueOf(target.trim().toUpperCase());
+                : Target.de(target);
 
         LogUtils.info("Abriendo " + navegador + " en " + destino);
         DriverManager.set(TargetFactory.crear(destino, navegador, config.headless()));

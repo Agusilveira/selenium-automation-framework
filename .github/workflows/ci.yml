@@ -239,14 +239,21 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: reporte-chrome
-          path: site
+          path: artefacto
 
-      # El artefacto sube reports/ y evidence/, asi que conserva esa estructura:
-      # el HTML queda en site/reports/, no en la raiz de site/.
+      # Solo el HTML, nunca el artefacto entero. El artefacto trae evidence/ y
+      # videos/, y en Pages eso queda publico e indexable: capturas y videos de
+      # lo que sea que muestre la aplicacion bajo prueba. El reporte no los
+      # necesita, porque embebe los screenshots en base64 y nombra los videos
+      # como texto; los archivos quedan en el artefacto, que es privado.
       - name: Dejar el reporte como index
         run: |
-          mv site/reports/ExtentReport.html site/index.html
-          rm -rf site/reports
+          if [ ! -f artefacto/reports/ExtentReport.html ]; then
+            echo "::error::El artefacto no trae reports/ExtentReport.html: el job de Chrome no llego a generar el reporte. Mira ese job, no este."
+            exit 1
+          fi
+          mkdir site
+          cp artefacto/reports/ExtentReport.html site/index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

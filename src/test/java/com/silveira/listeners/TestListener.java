@@ -69,8 +69,34 @@ public class TestListener implements ITestListener {
         ExtentTestManager.remover();
     }
 
+    /**
+     * TestNG informa como omitido al intento que falló y se va a reintentar.
+     *
+     * Tratarlo como un omitido más es justo lo que RetryAnalyzer promete no hacer:
+     * sin evidencia y con el reintento en verde, la intermitencia desaparece del
+     * reporte. Se captura igual que un fallo, pero como advertencia, porque el
+     * resultado final lo decide el reintento.
+     */
     @Override
     public void onTestSkipped(ITestResult resultado) {
+        if (resultado.wasRetried()) {
+            Throwable causa = resultado.getThrowable();
+            String mensaje = "Falló y se reintenta: " + (causa != null ? causa.getMessage() : "sin mensaje");
+            LogUtils.warn("↻ " + nombre(resultado) + ": " + mensaje);
+
+            VideoRecorder.marcarParaConservar();
+            cerrarVideo();
+            if (DriverManager.hayDriver()) {
+                ExtentTestManager.advertenciaConEvidencia(mensaje);
+                AllureManager.adjuntarScreenshot(nombre(resultado));
+                CaptureHelper.aArchivoSinFallar(nombre(resultado));
+            } else {
+                ExtentTestManager.advertencia(mensaje);
+            }
+            ExtentTestManager.remover();
+            return;
+        }
+
         cerrarVideo();
         ExtentTestManager.omitido("El caso se omitió");
         ExtentTestManager.remover();

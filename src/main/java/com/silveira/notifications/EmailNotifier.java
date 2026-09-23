@@ -109,7 +109,17 @@ public final class EmailNotifier {
      * Punto de entrada desde el listener: decide, envia, y pase lo que pase vuelve.
      */
     public static void notificar(ResumenDeCorrida resumen) {
-        Optional<ConfiguracionSmtp> config = ConfiguracionSmtp.desdeElEntorno();
+        // Leer el entorno tambien puede fallar -un MAIL_SMTP_PUERTO que no es un
+        // numero- y la garantia de no romper la corrida vale desde aca, no recien
+        // al enviar.
+        Optional<ConfiguracionSmtp> config;
+        try {
+            config = ConfiguracionSmtp.desdeElEntorno();
+        } catch (RuntimeException e) {
+            LogUtils.error("La configuración de mail del entorno no es válida. La corrida no se "
+                    + "ve afectada: " + e, e);
+            return;
+        }
         if (config.isEmpty()) {
             LogUtils.debug("Notificaciones por mail desactivadas: falta MAIL_SMTP_HOST "
                     + "o MAIL_DESTINATARIOS en el entorno.");

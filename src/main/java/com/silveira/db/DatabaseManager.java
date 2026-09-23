@@ -23,7 +23,10 @@ import java.sql.SQLException;
  */
 public final class DatabaseManager {
 
-    private static HikariDataSource fuente;
+    // volatile porque conexion() y hayConexion() la leen sin el lock, desde los
+    // hilos de una suite paralela: sin esto pueden ver un pool ya cerrado o no
+    // ver uno recién creado.
+    private static volatile HikariDataSource fuente;
 
     private DatabaseManager() {
     }

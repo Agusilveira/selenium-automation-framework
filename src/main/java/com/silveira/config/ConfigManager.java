@@ -128,26 +128,27 @@ public final class ConfigManager {
     public boolean headless()    { return getBool("headless"); }
     public String gridUrl()      { return get("grid.url"); }
 
-    /** El mensaje de error repite lo que se configuró, no la versión normalizada. */
+    /**
+     * El navegador configurado.
+     *
+     * Si el valor vino de un override, el error lo dice. BROWSER es una variable
+     * que muchos escritorios Linux ya definen para abrir links —xdg-open, firefox—
+     * y sin esa pista el mensaje apunta al perfil, que está bien.
+     */
     public Browser browser() {
-        String valor = get("browser").trim();
+        String valor = get("browser");
         try {
-            return Browser.valueOf(valor.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new FrameworkException(
-                    "Navegador no soportado: '" + valor + "'. Opciones: "
-                    + java.util.Arrays.toString(Browser.values()), e);
+            return Browser.de(valor);
+        } catch (FrameworkException e) {
+            if (esVacio(overrides.apply("BROWSER"))) throw e;
+            throw new FrameworkException(e.getMessage() + " El valor viene de BROWSER (propiedad "
+                    + "de sistema o variable de entorno), no del perfil. Algunos escritorios "
+                    + "Linux la definen para su navegador por defecto: pisala con -DBROWSER=chrome.", e);
         }
     }
 
     public Target target() {
-        String valor = get("target", Target.LOCAL.name()).trim();
-        try {
-            return Target.valueOf(valor.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new FrameworkException(
-                    "Target no válido: '" + valor + "'. Usá LOCAL o GRID.", e);
-        }
+        return Target.de(get("target", Target.LOCAL.name()));
     }
 
     public int explicitTimeout() {
@@ -166,10 +167,13 @@ public final class ConfigManager {
      * Si el framework puede recurrir a JavaScript cuando un click o un sendKeys no
      * produce efecto.
      *
-     * Apagado en local y prendido en CI a proposito: en tu maquina un evento que no
-     * llega es casi siempre un bug del test y tiene que explotar en el momento; en
-     * un runner suele ser el entorno. Con el fallback prendido en los dos lados,
-     * las dos causas se ven igual y la primera queda tapada.
+     * Prendido en todos los perfiles: el evento perdido se reprodujo en local y en
+     * CI, con y sin headless, así que no es del entorno. Lo que evita que tape
+     * bugs propios no es apagarlo, es que cada uso se cuenta en FallbackTracker y
+     * pasar el umbral de webui.fallback.js.max rompe la suite.
+     *
+     * El valor por defecto sigue siendo false: un perfil que no lo declara no
+     * hereda un recurso que nadie decidió usar.
      */
     public boolean fallbackJsHabilitado() {
         return Boolean.parseBoolean(get("webui.fallback.js.enabled", "false").trim());

@@ -628,12 +628,21 @@ Los tests no escriben en el reporte: lo hace `TestListener`. Cuando un caso
 falla, captura el screenshot **antes** de que se cierre el navegador y lo embebe
 en el HTML, además de guardarlo en `evidence/`.
 
+Un intento que falla y se reintenta (`retry.count`) deja la misma evidencia
+—screenshot y video— pero figura como **advertencia**, no como fallo ni como
+omitido: el resultado final lo decide el reintento, y la intermitencia queda a la
+vista en vez de desaparecer detrás de un verde.
+
+En GitHub Pages se publica solo el HTML del reporte de Chrome. `evidence/` y
+`videos/` quedan en el artefacto del job, que es privado.
+
 Para escribir en el reporte desde un paso propio:
 
 ```java
 ExtentTestManager.info("...")        ExtentTestManager.ok("...")
 ExtentTestManager.advertencia("...") ExtentTestManager.fallo("...")
 ExtentTestManager.omitido("...")     ExtentTestManager.falloConEvidencia("...")
+ExtentTestManager.advertenciaConEvidencia("...")
 
 AllureManager.adjuntarScreenshot(String nombre)
 AllureManager.adjuntarTexto(String nombre, String contenido)

@@ -77,7 +77,11 @@ public record ResumenDeCorrida(String suite,
             ITestContext contexto = resultado.getTestContext();
             pasados  += contexto.getPassedTests().size();
             fallados += contexto.getFailedTests().size();
-            omitidos += contexto.getSkippedTests().size();
+            // Un intento que se reintentó figura como omitido, pero el caso no se
+            // omitió: su resultado real es el del reintento, que ya está contado.
+            omitidos += (int) contexto.getSkippedTests().getAllResults().stream()
+                    .filter(caso -> !caso.wasRetried())
+                    .count();
             milisegundos += contexto.getEndDate().getTime() - contexto.getStartDate().getTime();
 
             for (ITestResult caso : contexto.getFailedTests().getAllResults()) {

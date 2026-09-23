@@ -38,7 +38,7 @@ public final class ExtentReportManager {
         // El encabezado responde lo primero que se pregunta quien abre un reporte:
         // contra qué ambiente y con qué navegador corrió.
         ConfigManager config = ConfigManager.get();
-        reporte.setSystemInfo("Ambiente", System.getProperty("env", "local"));
+        reporte.setSystemInfo("Ambiente", ConfigManager.perfilActivo());
         reporte.setSystemInfo("URL base", config.get("base.url", "no definida"));
         reporte.setSystemInfo("Navegador", config.get("browser", "no definido"));
         reporte.setSystemInfo("Headless", String.valueOf(config.get("headless", "?")));

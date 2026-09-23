@@ -56,13 +56,22 @@ public final class ExtentTestManager {
 
     /** Adjunta un screenshot embebido, así el HTML viaja solo sin carpeta de imágenes. */
     public static void falloConEvidencia(String mensaje) {
+        conEvidencia(Status.FAIL, mensaje);
+    }
+
+    /** Para un intento que falló y se va a reintentar: se ve, pero no es el fallo final. */
+    public static void advertenciaConEvidencia(String mensaje) {
+        conEvidencia(Status.WARNING, mensaje);
+    }
+
+    private static void conEvidencia(Status estado, String mensaje) {
         if (!hay()) return;
         try {
-            TEST.get().log(Status.FAIL, mensaje,
+            TEST.get().log(estado, mensaje,
                     MediaEntityBuilder.createScreenCaptureFromBase64String(
                             CaptureHelper.comoBase64()).build());
         } catch (Exception e) {
-            TEST.get().log(Status.FAIL, mensaje + " (no se pudo capturar evidencia)");
+            TEST.get().log(estado, mensaje + " (no se pudo capturar evidencia)");
         }
     }
 }

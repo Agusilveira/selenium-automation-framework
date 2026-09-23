@@ -214,10 +214,14 @@ public final class WebUI {
      * incompleto y el síntoma aparece varios pasos después, buscando elementos de
      * una página a la que nunca se llegó.
      *
-     * El valor de reserva se asigna con el setter nativo de HTMLInputElement más un
-     * evento input, no asignando .value: en aplicaciones React una asignación
-     * directa no actualiza el estado del componente y el valor se pierde al
-     * siguiente redibujado.
+     * El valor de reserva se asigna con el setter nativo más un evento input, no
+     * asignando .value: en aplicaciones React una asignación directa no actualiza
+     * el estado del componente y el valor se pierde al siguiente redibujado. El
+     * setter se toma del prototipo del propio elemento y no de HTMLInputElement:
+     * aplicado a un textarea, el de input lanza "Illegal invocation".
+     *
+     * Después de la reserva se vuelve a verificar. Una reserva que no se comprueba
+     * es el mismo valor perdido en silencio que este método viene a evitar.
      */
     public static void escribirVerificando(By locator, String texto) {
         WebElement campo = WaitUtils.clickeable(locator);
@@ -239,10 +243,16 @@ public final class WebUI {
         FallbackTracker.registrar("sendKeys en " + locator);
         js().executeScript(
                 "const setter = Object.getOwnPropertyDescriptor("
-              + "    window.HTMLInputElement.prototype, 'value').set;"
+              + "    Object.getPrototypeOf(arguments[0]), 'value').set;"
               + "setter.call(arguments[0], arguments[1]);"
               + "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
                 campo, texto);
+
+        String quedo = campo.getDomProperty("value");
+        if (!texto.equals(quedo)) {
+            throw new FrameworkException("Ni sendKeys ni la asignacion por JavaScript dejaron el "
+                    + "valor esperado en " + locator + ". Quedo: '" + quedo + "'.");
+        }
     }
 
     public static String obtenerTexto(By locator) {
