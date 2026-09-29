@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Verifica CassandraManager contra un Cassandra real levantado con
+     Testcontainers. Requiere Docker y tarda alrededor de un minuto en arrancar,
+     por eso no va con los unitarios. -->
+<suite name="Cassandra" verbose="1">
+    <listeners>
+        <listener class-name="com.silveira.listeners.TestListener"/>
+    </listeners>
+    <test name="CassandraManager">
+        <classes>
+            <class name="com.silveira.db.CassandraManagerTest"/>
+        </classes>
+    </test>
+</suite>

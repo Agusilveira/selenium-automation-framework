@@ -14,8 +14,10 @@ public class DriverFactoryTest {
         WebDriver driver = TargetFactory.crear(Target.LOCAL, Browser.CHROME, true);
         DriverManager.set(driver);
         try {
-            driver.get("https://www.saucedemo.com");
-            assertThat(driver.getTitle()).isEqualTo("Swag Labs");
+            // Una página en línea y no un sitio real: esto prueba que el driver se
+            // crea y navega, no que haya red ni que un tercero esté arriba.
+            driver.get("data:text/html,<title>Framework</title>");
+            assertThat(driver.getTitle()).isEqualTo("Framework");
             assertThat(DriverManager.get()).isSameAs(driver);
         } finally {
             DriverManager.quit();

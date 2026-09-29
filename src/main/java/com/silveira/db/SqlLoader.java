@@ -31,6 +31,15 @@ public final class SqlLoader {
         });
     }
 
+    /** Contenido de cql/<nombre>.cql, para CassandraManager. Mismo criterio y misma caché. */
+    public static String cargarCql(String nombre) {
+        return CACHE.computeIfAbsent("cql:" + nombre, n -> {
+            String contenido = FileHelper.leerTexto("src/test/resources/cql/" + nombre + ".cql");
+            LogUtils.debug("CQL cargado desde " + nombre + ".cql (" + contenido.length() + " caracteres)");
+            return contenido;
+        });
+    }
+
     public static void limpiarCache() {
         CACHE.clear();
     }

@@ -23,13 +23,12 @@
         </packages>
     </test>
 
-    <test name="SauceDemo">
+    <test name="Consulta por CUIT">
         <groups>
             <run><include name="regresion"/></run>
         </groups>
         <packages>
-            <package name="com.silveira.projects.saucedemo.tests"/>
-            <package name="com.silveira.projects.theinternet.tests"/>
+            <package name="com.silveira.projects.consulta.tests"/>
         </packages>
     </test>
 

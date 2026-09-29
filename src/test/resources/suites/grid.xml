@@ -17,7 +17,7 @@
             <run><include name="smoke"/></run>
         </groups>
         <packages>
-            <package name="com.silveira.projects.saucedemo.tests"/>
+            <package name="com.silveira.projects.consulta.tests"/>
         </packages>
     </test>
 

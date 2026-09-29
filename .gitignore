@@ -16,3 +16,6 @@ docs/superpowers/
 grid-videos/
 .app-token
 src/test/resources/config/.app-token
+
+# Perfiles con datos de la aplicacion bajo prueba: nunca al repositorio
+src/test/resources/config/*-privado.properties

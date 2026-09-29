@@ -80,29 +80,29 @@ public class HelpersTest {
 
     @Test
     public void resuelveLocatorsDesdeObjects() {
-        assertThat(PropertiesHelper.locator("login.boton"))
+        assertThat(PropertiesHelper.locator("test.boton"))
                 .isEqualTo("css:[data-test='login-button']");
     }
 
     @Test
     public void unLocatorInexistenteFallaNombrandolo() {
-        assertThatThrownBy(() -> PropertiesHelper.locator("login.no.existe"))
+        assertThatThrownBy(() -> PropertiesHelper.locator("test.no.existe"))
                 .isInstanceOf(ConfigKeyMissingException.class)
-                .hasMessageContaining("login.no.existe");
+                .hasMessageContaining("test.no.existe");
     }
 
     // --- LocatorHelper ---
 
     @Test
     public void construyeUnBySegunElTipoDelArchivo() {
-        assertThat(LocatorHelper.by("login.boton").toString())
+        assertThat(LocatorHelper.by("test.boton").toString())
                 .contains("cssSelector")
                 .contains("login-button");
     }
 
     @Test
     public void reemplazaLosParametrosDelLocator() {
-        assertThat(LocatorHelper.by("inventario.agregar", "sauce-labs-backpack").toString())
+        assertThat(LocatorHelper.by("test.agregar", "sauce-labs-backpack").toString())
                 .contains("add-to-cart-sauce-labs-backpack");
     }
 

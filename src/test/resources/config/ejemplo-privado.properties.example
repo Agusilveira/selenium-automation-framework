@@ -1,0 +1,28 @@
+# Plantilla del perfil de la aplicacion bajo prueba.
+#
+# Copiala como config/<nombre>-privado.properties (git la ignora) y corre con
+# -Denv=<nombre>-privado. Lleva lo que identifica a la aplicacion y no es
+# secreto. Usuarios, contraseñas, tokens y datos personales -como el CUIT de
+# prueba- van por variable de entorno y nunca en un archivo.
+#
+# Cada clave se puede pisar por entorno: base.url -> BASE_URL.
+
+base.url=https://app.ambiente-test.ejemplo
+api.base.url=https://servicios.ambiente-test.ejemplo
+
+# Cassandra
+cassandra.contact.points=cassandra1.ejemplo:9042,cassandra2.ejemplo:9042
+cassandra.datacenter=datacenter1
+cassandra.keyspace=mi_keyspace
+
+# Un perfil no hereda de otro: ConfigManager lee un solo archivo. Si queres
+# headless o reintentos, repetilos.
+browser=chrome
+headless=false
+target=LOCAL
+page.load.timeout=30
+explicit.timeout=15
+retry.count=0
+webui.fallback.js.enabled=true
+webui.fallback.js.max=10
+api.timeout=20

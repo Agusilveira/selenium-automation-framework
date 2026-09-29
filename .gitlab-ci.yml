@@ -1,0 +1,74 @@
+# Pipeline del framework.
+#
+# Supone un runner con executor Docker, que es lo habitual en GitLab: Maven
+# corre en una imagen y el navegador en un servicio del mismo job, así que el
+# runner no necesita tener nada instalado. Si los runners son de otro tipo, lo
+# que cambia es cómo se consigue el navegador, no los tests.
+#
+# El runner tiene que llegar a la aplicación de test y a Cassandra. Eso es red,
+# no framework: se resuelve con quien administra los runners.
+#
+# Variables de CI/CD (Settings > CI/CD > Variables), todas enmascaradas y
+# protegidas. Ninguna vive en el repositorio:
+#   BASE_URL, API_BASE_URL                         la aplicación de test
+#   APP_USUARIO, APP_PASSWORD                      login de la interfaz
+#   API_USUARIO, API_PASSWORD                      obtención del token
+#   CASSANDRA_CONTACT_POINTS, CASSANDRA_DATACENTER, CASSANDRA_KEYSPACE
+#   CASSANDRA_USUARIO, CASSANDRA_PASSWORD          si el cluster pide credenciales
+#   CUIT_PRUEBA                                    el dato que cruzan las tres capas
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  MAVEN_CLI: "-B --no-transfer-progress"
+  TEST_ENV: ci
+
+default:
+  image: maven:3.9-eclipse-temurin-21
+  cache:
+    key: maven
+    paths:
+      - .m2/repository
+
+stages:
+  - unitarios
+  - regresion
+
+# Lógica del framework, sin navegador ni red: si esto falla, lo roto es el
+# framework y no la aplicación. Corre en todo push.
+unitarios:
+  stage: unitarios
+  script:
+    - mvn $MAVEN_CLI test -DsuiteXmlFile=src/test/resources/suites/unit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: target/surefire-reports/TEST-*.xml
+
+# La regresión contra la aplicación: interfaz, servicios y Cassandra.
+#
+# Chrome corre como servicio, igual que un nodo del Grid. El framework ya sabe
+# hablar con un Grid, así que alcanza con apuntarlo ahí por variable.
+regresion:
+  stage: regresion
+  services:
+    - name: selenium/standalone-chrome:4.47.0
+      alias: chrome
+  variables:
+    TARGET: GRID
+    GRID_URL: http://chrome:4444
+  script:
+    - mvn $MAVEN_CLI test -DsuiteXmlFile=src/test/resources/suites/regression.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
+  artifacts:
+    when: always
+    expire_in: 30 days
+    # Quedan dentro de GitLab, visibles para quien tenga acceso al proyecto. Los
+    # screenshots muestran los datos de la aplicación: no se publican afuera.
+    paths:
+      - reports/
+      - evidence/
+    reports:
+      junit: target/surefire-reports/TEST-*.xml
